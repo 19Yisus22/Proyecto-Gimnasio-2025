@@ -1,0 +1,49 @@
+.bg-dark-purple {
+    background: linear-gradient(135deg, #3e226f, #5a2ea6);
+    min-height: 100vh;
+    color: #fff;
+}
+
+.carousel-img {
+    max-height: 250px;
+    width: auto;
+    display: block;
+    margin: 0 auto;
+    border-radius: 8px;
+}
+
+.carousel-caption-below {
+    background-color: rgba(28,28,28,0.85);
+    color: #fff;
+    padding: 0.5rem;
+    margin-top: 0.25rem;
+    text-align: center;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.small-card .card-body {
+    padding: 0.5rem;
+}
+
+.small-card .card-title {
+    font-size: 0.9rem;
+}
+
+.small-card .card-text {
+    font-size: 0.75rem;
+}
+
+.btn-gradient.btn-sm {
+    padding: 0.3rem;
+    font-size: 0.75rem;
+}
+
+.blog-intro {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    color: #fff;
+    background-color: rgba(28,28,28,0.8);
+    padding: 1rem;
+    border-radius: 12px;
+}

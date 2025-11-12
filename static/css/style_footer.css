@@ -1,0 +1,21 @@
+html, body {
+  height: 100%;
+}
+body {
+  display: flex;
+  flex-direction: column;
+}
+.footer-container {
+  margin-top: auto;
+}
+.footer-section h5 {
+  color: #f8f9fa;
+}
+.footer-section a.btn-outline-light {
+  transition: all 0.3s ease;
+}
+.footer-section a.btn-outline-light:hover {
+  background-color: #0d6efd;
+  border-color: #0d6efd;
+  color: #fff;
+}

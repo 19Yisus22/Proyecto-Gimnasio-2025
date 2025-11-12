@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Progreso & Entrenamiento | GymApp</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style_carrito.css') }}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>const ID_USUARIO="{{ session['id_usuario'] if session.get('id_usuario') else '' }}";</script>
+<style>
+.card{box-shadow:0 2px 8px rgba(0,0,0,0.06);border:none}
+#chatNutri{height:260px;overflow:auto;background:#f8f9fa;padding:10px;border-radius:6px}
+.msg{margin-bottom:10px}
+.msg .meta{font-size:.85rem;color:#666}
+.me{background:#d1e7dd;padding:8px;border-radius:8px}
+.other{background:#fff;padding:8px;border-radius:8px}
+.progress-small{height:14px}
+</style>
+</head>
+<body>
+<main class="container mt-4 mb-5">
+  <h2 class="mb-4">Progreso Físico, Nutrición y Entrenamientos</h2>
+
+  <div class="row g-4">
+    <div class="col-lg-4">
+      <div class="card p-3 mb-4">
+        <h5 class="mb-3">Evaluación Inicial</h5>
+        <form id="formEval">
+          <div class="mb-2"><input id="eval_nombre" class="form-control" placeholder="Nombre" required></div>
+          <div class="mb-2"><input id="eval_edad" type="number" class="form-control" placeholder="Edad" required></div>
+          <div class="mb-2"><input id="eval_sexo" class="form-control" placeholder="Sexo (M/F)" required></div>
+          <div class="mb-2"><input id="eval_peso" type="number" step="0.1" class="form-control" placeholder="Peso (kg)" required></div>
+          <div class="mb-2"><input id="eval_altura" type="number" step="0.1" class="form-control" placeholder="Altura (cm)" required></div>
+          <div class="mb-2"><input id="eval_actividad" class="form-control" placeholder="Nivel actividad (sedentario, ligero, moderado, activo)" required></div>
+          <div class="mb-2">
+            <label class="form-label mb-1">Restricciones / Alergias</label>
+            <input id="eval_restricciones" class="form-control" placeholder="Ej: vegano, lactosa, frutos secos">
+          </div>
+          <div class="row g-2">
+            <div class="col"><button type="submit" class="btn btn-primary w-100">Calcular TMB/TDEE</button></div>
+            <div class="col"><button type="button" id="btnCargarEval" class="btn btn-outline-secondary w-100">Cargar datos</button></div>
+          </div>
+          <div id="evalResultados" class="mt-3"></div>
+        </form>
+      </div>
+
+      <div class="card p-3 mb-4">
+        <h5 class="mb-3">Crear Plan Nutricional</h5>
+        <form id="formPlan">
+          <div class="mb-2"><input id="plan_titulo" class="form-control" placeholder="Título del plan" required></div>
+          <div class="mb-2"><input id="plan_calorias" type="number" class="form-control" placeholder="Calorías diarias objetivo" required></div>
+          <div class="mb-2">
+            <label class="form-label mb-1">Macros (%)</label>
+            <div class="d-flex gap-2">
+              <input id="macro_prot" type="number" class="form-control" placeholder="Proteína" required>
+              <input id="macro_grasa" type="number" class="form-control" placeholder="Grasa" required>
+              <input id="macro_carbs" type="number" class="form-control" placeholder="Carbs" required>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label mb-1">Estructura de comidas</label>
+            <select id="plan_template" class="form-select">
+              <option value="plantilla_estandar">Plantilla estándar (Desayuno, Almuerzo, Cena, 2 snacks)</option>
+              <option value="plantilla_hipercalorica">Hipercalórica</option>
+              <option value="plantilla_deficit">Déficit calórico</option>
+            </select>
+          </div>
+          <div class="mb-2"><input id="plan_inicio" type="date" class="form-control" required></div>
+          <div class="mb-2"><input id="plan_fin" type="date" class="form-control" required></div>
+          <div class="d-grid"><button type="submit" class="btn btn-success">Crear / Asignar Plan</button></div>
+        </form>
+      </div>
+
+      <div class="card p-3">
+        <h5 class="mb-3">Chat Nutricionista</h5>
+        <div id="chatNutri"></div>
+        <div class="input-group mt-2">
+          <input id="mensajeNutri" class="form-control" placeholder="Mensaje...">
+          <button id="btnEnviarNutri" class="btn btn-primary"><i class="bi bi-send-fill"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0">Seguimiento y Consumo</h5>
+          <div class="d-flex gap-2">
+            <select id="filtroPeriodo" class="form-select w-auto">
+              <option value="mensual">Mensual</option>
+              <option value="semanal">Semanal</option>
+              <option value="diario">Diario</option>
+            </select>
+            <button id="btnDescargarReporte" class="btn btn-outline-success"><i class="bi bi-file-earmark-arrow-down"></i> Descargar Reporte</button>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <div class="card p-2 text-center">
+              <small>Ingesta Planificada</small>
+              <h4 id="planCalorias">-- kcal</h4>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card p-2 text-center">
+              <small>Ingesta Real</small>
+              <h4 id="realCalorias">-- kcal</h4>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card p-2 text-center">
+              <small>Balance</small>
+              <h4 id="balanceCalorias">--</h4>
+            </div>
+          </div>
+        </div>
+
+        <div class="card p-3 mb-3">
+          <h6 class="mb-2">Registrar Ingesta</h6>
+          <div class="row g-2 align-items-center">
+            <div class="col-md-5"><input id="alimentoBuscar" class="form-control" placeholder="Buscar alimento por nombre"></div>
+            <div class="col-md-3"><input id="cantidadAlimento" type="number" step="1" class="form-control" placeholder="Grs / porción" value="100"></div>
+            <div class="col-md-2"><button id="btnAgregarAlimento" class="btn btn-primary w-100">Agregar</button></div>
+            <div class="col-md-2"><button id="btnSyncWearable" class="btn btn-outline-secondary w-100"><i class="bi bi-wifi"></i> Sincronizar</button></div>
+          </div>
+          <div id="listaIngesta" class="mt-3"></div>
+        </div>
+
+        <div class="card p-3 mb-3">
+          <h6 class="mb-2">Gráficos de Consumo y Macros</h6>
+          <canvas id="graficoMacros" height="140"></canvas>
+        </div>
+
+        <div class="card p-3 mb-3">
+          <h6 class="mb-2">Planes Asignados</h6>
+          <div id="planesAsignados"></div>
+        </div>
+
+        <div class="card p-3">
+          <h6 class="mb-2">Recomendaciones Automáticas</h6>
+          <div id="recomendaciones"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="modalContainer"></div>
+<div id="toastContainer" class="position-fixed p-3 top-0 end-0" style="z-index:2000"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+const toastContainer=document.getElementById('toastContainer');
+function toast(msg,err=false){const t=document.createElement('div');t.className=`toast align-items-center ${err?'bg-danger text-white':'bg-success text-white'} border-0 show`;t.innerHTML=`<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>`;toastContainer.appendChild(t);setTimeout(()=>t.remove(),2000);}
+
+async function fetchJSON(url,opts){const res=await fetch(url,opts);if(res.headers.get('content-type')&&res.headers.get('content-type').includes('application/json'))return res.json();return res;}
+
+document.getElementById('formEval').addEventListener('submit',async e=>{e.preventDefault();const nombre=document.getElementById('eval_nombre').value.trim();const edad=parseInt(document.getElementById('eval_edad').value);const sexo=document.getElementById('eval_sexo').value.trim().toUpperCase();const peso=parseFloat(document.getElementById('eval_peso').value);const altura=parseFloat(document.getElementById('eval_altura').value);const actividad=document.getElementById('eval_actividad').value.trim().toLowerCase();const restricciones=document.getElementById('eval_restricciones').value.trim();if(!nombre||!edad||!peso||!altura)return;let tmb; if(sexo==='M') tmb=10*peso+6.25*altura-5*edad+5; else tmb=10*peso+6.25*altura-5*edad-161; let factor=1.2; if(actividad.includes('ligero'))factor=1.375; if(actividad.includes('moderado'))factor=1.55; if(actividad.includes('activo'))factor=1.725; const tdee=Math.round(tmb*factor); document.getElementById('evalResultados').innerHTML=`<div class="mt-2"><strong>TMB:</strong> ${Math.round(tmb)} kcal | <strong>TDEE:</strong> ${tdee} kcal</div>`; try{await fetch('/evaluacion_inicial',{method:'POST',headers:{"Content-Type":"application/json"},body:JSON.stringify({id_usuario:ID_USUARIO,nombre,edad,sexo,peso,altura,actividad,restricciones,tmb:Math.round(tmb),tdee})});toast('Evaluación guardada');loadAssignedPlans();}catch{toast('Error guardando evaluación',true);}});
+
+document.getElementById('btnCargarEval').addEventListener('click',async()=>{try{const d=await fetchJSON(`/evaluacion_inicial/${ID_USUARIO}`,{}); if(d && d.ok){document.getElementById('eval_nombre').value=d.data.nombre||'';document.getElementById('eval_edad').value=d.data.edad||'';document.getElementById('eval_sexo').value=d.data.sexo||'';document.getElementById('eval_peso').value=d.data.peso||'';document.getElementById('eval_altura').value=d.data.altura||'';document.getElementById('eval_actividad').value=d.data.actividad||'';document.getElementById('eval_restricciones').value=d.data.restricciones||'';document.getElementById('evalResultados').innerHTML=`<div class="mt-2"><strong>TMB:</strong> ${d.data.tmb||'--'} kcal | <strong>TDEE:</strong> ${d.data.tdee||'--'} kcal</div>`;} }catch{toast('Error cargando evaluación',true);}});
+
+document.getElementById('formPlan').addEventListener('submit',async e=>{e.preventDefault();const titulo=document.getElementById('plan_titulo').value.trim();const calorias=parseInt(document.getElementById('plan_calorias').value);const prot=parseInt(document.getElementById('macro_prot').value);const grasa=parseInt(document.getElementById('macro_grasa').value);const carbs=parseInt(document.getElementById('macro_carbs').value);const plantilla=document.getElementById('plan_template').value;const inicio=document.getElementById('plan_inicio').value;const fin=document.getElementById('plan_fin').value;if(!titulo||!calorias||!(prot+grasa+carbs))return; try{const body={id_miembro:ID_USUARIO,titulo,calorias,macros:{prot,grasa,carbs},plantilla,inicio,fin}; const res=await fetch('/planes_nutricion',{method:'POST',headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); const d=await res.json(); if(d.ok){toast('Plan creado y asignado');loadAssignedPlans();}else toast('Error creando plan',true);}catch{toast('Error creando plan',true);}});
+
+document.getElementById('btnAgregarAlimento').addEventListener('click',async()=>{const nombre=document.getElementById('alimentoBuscar').value.trim();const cantidad=parseFloat(document.getElementById('cantidadAlimento').value)||100; if(!nombre)return; try{const res=await fetch(`/alimentos?nombre=${encodeURIComponent(nombre)}`); const j=await res.json(); if(!j || j.length===0){toast('Alimento no encontrado',true);return;} const alimento=j[0]; const kcal=Math.round((alimento.kcal_per_100g||0)*cantidad/100); const prot=Math.round((alimento.prot_per_100g||0)*cantidad/100); const grasa=Math.round((alimento.grasa_per_100g||0)*cantidad/100); const carbs=Math.round((alimento.carbs_per_100g||0)*cantidad/100); await fetch('/ingesta',{method:'POST',headers:{"Content-Type":"application/json"},body:JSON.stringify({id_usuario:ID_USUARIO,alimento_id:alimento.id,nombre:alimento.nombre,cantidad,kcal,prot,grasa,carbs,fecha:new Date().toISOString()})}); toast('Alimento agregado'); loadIngesta(); }catch{toast('Error agregando alimento',true);}});
+
+document.getElementById('btnSyncWearable').addEventListener('click',async()=>{try{const res=await fetch(`/sync_wearable/${ID_USUARIO}`,{method:'POST'}); if(res.ok)toast('Sincronización completada'); else toast('Error sincronizando',true);}catch{toast('Error sincronizando',true);}});
+
+async function loadIngesta(){ try{const res=await fetch(`/ingesta/${ID_USUARIO}`); const data=await res.json(); renderIngesta(data||[]); updateSummary(data||[]); renderMacrosChart(data||[]); }catch{toast('Error cargando ingesta',true);} }
+
+function renderIngesta(items){ const cont=document.getElementById('listaIngesta'); cont.innerHTML=''; if(!items.length){cont.innerHTML='<p class="text-muted">Sin ingestas registradas</p>';return;} items.forEach(it=>{ const div=document.createElement('div'); div.className='d-flex justify-content-between align-items-center border-bottom py-2'; div.innerHTML=`<div><strong>${it.nombre}</strong> <small class="text-muted">(${it.cantidad} g)</small><div class="text-muted small">${it.kcal} kcal • P ${it.prot}g • G ${it.grasa}g • C ${it.carbs}g</div></div><div><button class="btn btn-sm btn-outline-danger" data-id="${it.id}" onclick="eliminarIngesta('${it.id}')"><i class='bi bi-trash'></i></button></div>`; cont.appendChild(div); }); }
+
+async function eliminarIngesta(id){ try{const res=await fetch(`/ingesta/${id}`,{method:'DELETE'}); if(res.ok){toast('Registro eliminado'); loadIngesta(); } }catch{toast('Error eliminando',true);} }
+
+function updateSummary(items){ const planCal=items.reduce((s,i)=>s+(i.planado_kcal||0),0)||0; const real=items.reduce((s,i)=>s+(i.kcal||0),0)||0; document.getElementById('planCalorias').textContent=planCal||'--'; document.getElementById('realCalorias').textContent=real; const bal=real - planCal; document.getElementById('balanceCalorias').textContent=(bal>0?`+${bal} kcal`:`${bal} kcal`); }
+
+let macrosChart;
+function renderMacrosChart(items){ if(macrosChart)macrosChart.destroy(); const etiquetas=items.map(i=>new Date(i.fecha).toLocaleDateString()); const prot=items.map(i=>i.prot||0); const grasa=items.map(i=>i.grasa||0); const carbs=items.map(i=>i.carbs||0); const ctx=document.getElementById('graficoMacros'); macrosChart=new Chart(ctx,{type:'bar',data:{labels:etiquetas,datasets:[{label:'Proteínas (g)',data:prot,backgroundColor:'#198754'},{label:'Grasas (g)',data:grasa,backgroundColor:'#dc3545'},{label:'Carbs (g)',data:carbs,backgroundColor:'#ffc107'}]},options:{responsive:true,scales:{x:{stacked:true},y:{stacked:false}}}}); }
+
+async function loadAssignedPlans(){ try{const res=await fetch(`/planes_nutricion?id_miembro=${ID_USUARIO}`); const r=await res.json(); const cont=document.getElementById('planesAsignados'); cont.innerHTML=''; if(!r || !r.length){cont.innerHTML='<p class="text-muted">No hay planes asignados</p>';return;} r.forEach(p=>{ const div=document.createElement('div'); div.className='border p-2 mb-2 rounded'; div.innerHTML=`<div class="d-flex justify-content-between align-items-center"><div><strong>${p.titulo}</strong><div class="small text-muted"> ${new Date(p.fecha_creacion).toLocaleDateString()} • ${p.calorias} kcal</div></div><div><button class="btn btn-sm btn-outline-primary me-2" onclick="verPlan('${p.id_plan}')">Ver</button><button class="btn btn-sm btn-outline-danger" onclick="desasignarPlan('${p.id_plan}')">Desasignar</button></div></div>`; cont.appendChild(div); }); }catch{toast('Error cargando planes',true);} }
+
+async function verPlan(id){ try{const res=await fetch(`/planes_nutricion/${id}`); const d=await res.json(); if(d && d.ok){ const modalHtml=`<div class="modal fade" id="planModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content p-3"><h5>${d.data.titulo}</h5><p>${d.data.descripcion||''}</p><div><strong>Calorías:</strong> ${d.data.calorias} kcal</div><div class="mt-3"><strong>Macros:</strong> P ${d.data.macros.prot}% • G ${d.data.macros.grasa}% • C ${d.data.macros.carbs}%</div><button class="btn btn-secondary mt-3" data-bs-dismiss="modal">Cerrar</button></div></div></div>`; document.getElementById('modalContainer').innerHTML=modalHtml; const m=new bootstrap.Modal(document.getElementById('planModal')); m.show(); document.getElementById('planModal').addEventListener('hidden.bs.modal',()=>document.getElementById('modalContainer').innerHTML=''); } }catch{toast('Error cargando plan',true);} }
+
+async function desasignarPlan(id){ try{const res=await fetch(`/planes_nutricion/${id}`,{method:'DELETE'}); if(res.ok){toast('Plan desasignado'); loadAssignedPlans();} }catch{toast('Error desasignando',true);} }
+
+document.getElementById('filtroPeriodo').addEventListener('change',async()=>{ await loadIngesta(); });
+
+document.getElementById('btnDescargarReporte').addEventListener('click',async()=>{ try{const periodo=document.getElementById('filtroPeriodo').value; const res=await fetch('/planes_nutricion/reporte',{method:'POST',headers:{"Content-Type":"application/json"},body:JSON.stringify({id_usuario:ID_USUARIO,periodo})}); if(res.ok){ const blob=await res.blob(); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='reporte_nutricion.pdf'; a.click(); URL.revokeObjectURL(url); }else toast('Error generando reporte',true);}catch{toast('Error generando reporte',true);} });
+
+async function loadRecommendations(){ try{const res=await fetch(`/recomendaciones?id_usuario=${ID_USUARIO}`); const j=await res.json(); const cont=document.getElementById('recomendaciones'); cont.innerHTML=''; if(!j || !j.length){cont.innerHTML='<p class="text-muted">Sin recomendaciones</p>';return;} j.forEach(r=>{ const div=document.createElement('div'); div.className='border p-2 rounded mb-2'; div.innerHTML=`<strong>${r.titulo}</strong><div class="small text-muted">${r.descripcion}</div>`; cont.appendChild(div); }); }catch{toast('Error cargando recomendaciones',true);} }
+
+async function cargarChatNutri(){ try{const res=await fetch(`/nutricion_chat?id_usuario=${ID_USUARIO}`); const data=await res.json(); const box=document.getElementById('chatNutri'); box.innerHTML=''; data.forEach(m=>{ const div=document.createElement('div'); div.className='msg '+(m.id_usuario===ID_USUARIO?'me':'other'); div.innerHTML=`<div class="d-flex align-items-start"><img src="${m.usuario_info?.foto_perfil||'/static/img/default_user.png'}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;margin-right:8px;cursor:pointer" data-n="${m.usuario_info?.nombre_usuario||'Usuario'}" data-e="${m.usuario_info?.correo||''}" data-f="${m.usuario_info?.foto_perfil||''}"><div><div class="meta"><strong>${m.usuario_info?.nombre_usuario||'Usuario'}</strong> • ${new Date(m.created_at).toLocaleString('es-CO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div><div>${m.mensaje}</div></div></div>`; box.appendChild(div); }); box.scrollTop=box.scrollHeight; attachProfileClicks(); }catch{toast('Error cargando chat',true);} }
+
+function attachProfileClicks(){ document.querySelectorAll('#chatNutri img').forEach(img=>{ img.addEventListener('click',()=>{ const nombre=img.dataset.n; const correo=img.dataset.e; const foto=img.dataset.f || img.src; const modalHtml=`<div class="modal fade" id="perfilModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content p-3 text-center"><img src="${foto}" class="rounded-circle mb-3" style="width:140px;height:140px;object-fit:cover"><h5>${nombre}</h5><p>${correo}</p></div></div></div>`; document.getElementById('modalContainer').innerHTML=modalHtml; const m=new bootstrap.Modal(document.getElementById('perfilModal')); m.show(); document.getElementById('perfilModal').addEventListener('hidden.bs.modal',()=>document.getElementById('modalContainer').innerHTML=''); }); }); }
+
+document.getElementById('btnEnviarNutri').addEventListener('click',async()=>{ const msg=document.getElementById('mensajeNutri').value.trim(); if(!msg)return; try{ await fetch('/nutricion_chat',{method:'POST',headers:{"Content-Type":"application/json"},body:JSON.stringify({id_usuario:ID_USUARIO,mensaje:msg})}); document.getElementById('mensajeNutri').value=''; cargarChatNutri(); }catch{toast('Error enviando mensaje',true);} });
+
+async function init(){ await loadIngesta(); await loadAssignedPlans(); await loadRecommendations(); await cargarChatNutri(); }
+init();
+</script>
+</body>
+</html>

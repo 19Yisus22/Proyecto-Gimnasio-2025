@@ -1,0 +1,84 @@
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style_navbar.css') }}">
+
+<div class="sidebar d-flex flex-column p-3">
+  <div class="text-center mb-4">
+    <a href="{{ url_for('index') }}">
+      <img src="{{ url_for('static', filename='uploads/icon.png') }}" alt="Logo" width="70" class="rounded mb-2">
+    </a>
+    <h5 class="text-white fw-bold">
+      {% if user %}
+        {% set rol_nombre = user['rol']['nombre_rol'] %}
+        {% if rol_nombre == 'miembro' %}Miembro
+        {% elif rol_nombre == 'entrenador' %}Entrenador
+        {% elif rol_nombre == 'recepcionista' %}Recepcionista
+        {% elif rol_nombre == 'administrador' %}Administrador
+        {% elif rol_nombre == 'nutricionista' %}Nutricionista
+        {% else %}Usuario{% endif %}
+      {% else %}
+        Invitado
+      {% endif %}
+    </h5>
+  </div>
+
+  <ul class="nav flex-column mb-auto">
+    {% if user %}
+      {% set rol_nombre = user['rol']['nombre_rol'] %}
+      {% if rol_nombre == 'miembro' %}
+        <li><a href="/clases_reservas" class="nav-link"><i class="bi bi-calendar-check me-2"></i>Clases y Reservas</a></li>
+        <li><a href="/progreso_entrenamiento" class="nav-link"><i class="bi bi-graph-up me-2"></i>Progreso Físico</a></li>
+        <li><a href="/plan_nutricional" class="nav-link"><i class="bi bi-apple me-2"></i>Plan Nutricional</a></li>
+        <li><a href="/feedback_clases" class="nav-link"><i class="bi bi-chat-dots me-2"></i>Soporte y Comunidad</a></li>
+      {% elif rol_nombre == 'entrenador' %}
+        <li><a href="/index_entrenador" class="nav-link"><i class="bi bi-house-door me-2"></i>Inicio</a></li>
+        <li><a href="/clases_entrenador" class="nav-link"><i class="bi bi-calendar-event me-2"></i>Mis Clases</a></li>
+        <li><a href="/progreso_miembros" class="nav-link"><i class="bi bi-people me-2"></i>Progreso Miembros</a></li>
+      {% elif rol_nombre == 'recepcionista' %}
+        <li><a href="/index_recepcionista" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
+        <li><a href="/gestionar_reservas" class="nav-link"><i class="bi bi-journal-check me-2"></i>Reservas</a></li>
+        <li><a href="/pagos" class="nav-link"><i class="bi bi-cash-coin me-2"></i>Pagos</a></li>
+      {% elif rol_nombre == 'administrador' %}
+        <li><a href="/index_admin" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
+        <li><a href="/admin/usuarios_roles" class="nav-link"><i class="bi bi-people me-2"></i>Usuarios</a></li>
+        <li><a href="/admin/reportes_analisis" class="nav-link"><i class="bi bi-bar-chart-line me-2"></i>Reportes</a></li>
+        <li><a href="/admin/config_sistema" class="nav-link"><i class="bi bi-gear me-2"></i>Configuración</a></li>
+      {% elif rol_nombre == 'nutricionista' %}
+        <li><a href="/index_nutricionista" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
+        <li><a href="/planes_nutricionales" class="nav-link"><i class="bi bi-apple me-2"></i>Planes Asignados</a></li>
+        <li><a href="/mensajes_miembros" class="nav-link"><i class="bi bi-chat-left-dots me-2"></i>Mensajes</a></li>
+      {% endif %}
+    {% else %}
+      <li><a href="{{ url_for('index') }}" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
+    {% endif %}
+  </ul>
+
+  <div class="profile-section mt-auto pt-3 border-top text-center">
+    {% if user %}
+      <div class="dropdown">
+        <a href="#" class="d-flex align-items-center justify-content-center text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+          <img src="{{ user.get('imagen_url') or url_for('static', filename='uploads/default_icon_profile.png') }}" alt="Perfil" width="45" height="45" class="rounded-circle me-2" style="object-fit:cover;">
+          <span class="text-white fw-semibold">{{ user.get('nombre') }}</span>
+        </a>
+        <ul class="dropdown-menu text-small shadow dropdown-menu-end animate__animated animate__fadeIn">
+          <li><a class="dropdown-item" href="/index_perfil">Mi Perfil</a></li>
+          <li><a class="dropdown-item" href="/index_configuracion">Configuración</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><button class="dropdown-item text-danger" id="btnCerrarSesionDropdown">Cerrar sesión</button></li>
+        </ul>
+      </div>
+    {% else %}
+      <a href="/login" class="btn btn-outline-light w-100 mb-2">Iniciar Sesión</a>
+      <a href="/registro" class="btn btn-light w-100">Registrarse</a>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+document.getElementById("btnCerrarSesionDropdown")?.addEventListener("click", () => {
+  fetch('/logout', { method: 'GET' })
+    .then(res => res.json())
+    .then(data => { window.location.href = data.redirect || "/"; })
+    .catch(() => alert('Error al cerrar sesión'));
+});
+</script>

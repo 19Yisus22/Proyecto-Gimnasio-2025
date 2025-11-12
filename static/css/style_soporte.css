@@ -1,0 +1,132 @@
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #3e226f, #5a2ea6);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+h1,h2,h3,h4,h5,h6,p,span,label,a {
+    color: #fff;
+    transition: color 0.3s ease;
+}
+
+.card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+    background: rgba(47,47,47,0.85);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+}
+
+input.form-control, select.form-select, textarea.form-control {
+    background-color: #fff;
+    color: #000;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+input.form-control:focus, select.form-select:focus, textarea.form-control:focus {
+    border-color: #9f7cf0;
+    box-shadow: 0 0 8px rgba(159,124,240,0.5);
+    color: #000;
+}
+
+button.btn-primary {
+    background: linear-gradient(135deg, #7f5af0, #d76cf8);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+}
+button.btn-primary:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 5px 15px rgba(142,197,252,0.4);
+}
+
+button.btn-success {
+    background: linear-gradient(135deg, #6fcf97, #34d399);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+}
+button.btn-success:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+button.btn-outline-primary, button.btn-outline-success {
+    border-radius: 10px;
+    transition: all 0.3s ease;
+}
+button.btn-outline-primary:hover, button.btn-outline-success:hover {
+    transform: translateY(-1px);
+}
+
+.nav-tabs .nav-link {
+    border-radius: 8px 8px 0 0;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    transition: all 0.3s ease;
+}
+.nav-tabs .nav-link.active {
+    background: rgba(159,124,240,0.3);
+    color: #fff;
+}
+
+#chatSoporte {
+    height: 400px;
+    overflow-y: auto;
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 10px;
+    scroll-behavior: smooth;
+}
+
+.msg {
+    display: flex;
+    margin-bottom: 8px;
+}
+.msg.admin { justify-content: flex-end; }
+.bubble {
+    padding: 8px 12px;
+    border-radius: 18px;
+    max-width: 70%;
+    display: inline-block;
+    transition: all 0.3s;
+}
+.bubble.user { background: #7f5af0; color: #fff; }
+.bubble.admin { background: rgba(255,255,255,0.2); color: #fff; }
+
+.table {
+    background: rgba(47,47,47,0.85);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.table th, .table td { border-color: rgba(255,255,255,0.1); }
+
+.footer-container {
+    margin-top: auto;
+    background-color: #343a40;
+    color: #f8f9fa;
+}
+.footer-section a.btn-outline-light {
+    transition: all 0.3s ease;
+}
+.footer-section a.btn-outline-light:hover {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+}

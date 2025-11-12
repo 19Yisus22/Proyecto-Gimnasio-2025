@@ -1,0 +1,90 @@
+body {
+    background: linear-gradient(135deg, #3e226f, #5a2ea6);
+    color: #fff;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: auto;
+}
+
+.card {
+    width: 90%;
+    max-width: 700px;
+    padding: 2rem;
+    border-radius: 20px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    background-color: #1c1c1c;
+    animation: slideIn 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    color: #fff;
+    grid-template-rows: auto 1fr auto;
+}
+
+.logo-container {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+
+.logo-container img {
+    width: 60px;
+    height: 60px;
+}
+
+@keyframes slideIn {
+    0% { transform: translateY(-50px) scale(0.95); opacity: 0; }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+input.form-control, textarea.form-control, select.form-select {
+    background-color: #2e2d2d;
+    color: #fff;
+    border: 1px solid #555;
+    width: 100%;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+}
+
+input.form-control:focus, textarea.form-control:focus, select.form-select:focus {
+    border-color: #e67e22;
+    box-shadow: 0 0 8px rgba(230,126,34,0.6);
+    color: #fff;
+}
+
+button.btn-gradient {
+    background: linear-gradient(45deg,#e67e22,#d35400);
+    border: none;
+    color: #fff;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    width: 100%;
+    padding: 0.6rem 1rem;
+}
+
+button.btn-gradient:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(230,126,34,0.5);
+}
+
+label, p, span, h1, h2, h3, h4, h5, h6, a {
+    color: #fff;
+}
+
+form#registerForm {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+form#registerForm .mb-3 {
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+}

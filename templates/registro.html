@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registro | Gimnasio</title>
+<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='uploads/icon.png') }}">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style_registro.css') }}">
+</head>
+<body>
+<div id="toastContainer" class="position-fixed top-0 start-0 p-3" style="z-index:1080;"></div>
+<div class="card">
+  <div class="logo-container">
+    <img src="{{ url_for('static', filename='uploads/icon.png') }}" alt="Logo Gimnasio">
+  </div>
+  <h2 class="text-center mb-4" style="grid-column:1/-1;">Crear Cuenta</h2>
+  <form id="registerForm" style="grid-column:1/-1;">
+    <div class="mb-3 text-start">
+      <label for="nombre" class="form-label">Nombre:</label>
+      <input type="text" id="nombre" name="nombre" class="form-control" required>
+    </div>
+    <div class="mb-3 text-start">
+      <label for="apellido" class="form-label">Apellido:</label>
+      <input type="text" id="apellido" name="apellido" class="form-control" required>
+    </div>
+    <div class="mb-3 text-start">
+      <label for="genero" class="form-label">Género:</label>
+      <select id="genero" name="genero" class="form-select">
+        <option value="">Selecciona</option>
+        <option value="Masculino">Masculino</option>
+        <option value="Femenino">Femenino</option>
+        <option value="Otro">Otro</option>
+      </select>
+    </div>
+    <div class="mb-3 text-start">
+      <label for="telefono" class="form-label">Teléfono:</label>
+      <input type="text" id="telefono" name="telefono" class="form-control">
+    </div>
+    <div class="mb-3 text-start">
+      <label for="direccion" class="form-label">Dirección:</label>
+      <input type="text" id="direccion" name="direccion" class="form-control">
+    </div>
+    <div class="mb-3 text-start">
+      <label for="fecha_nacimiento" class="form-label">Fecha de Nacimiento:</label>
+      <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" class="form-control">
+    </div>
+    <div class="mb-3 text-start">
+      <label for="cedula" class="form-label">Cédula:</label>
+      <input type="text" id="cedula" name="cedula" class="form-control" required>
+    </div>
+    <div class="mb-3 text-start">
+      <label for="correo" class="form-label">Correo:</label>
+      <input type="email" id="correo" name="correo" class="form-control" required>
+    </div>
+    <div class="mb-3 text-start">
+      <label for="contrasena" class="form-label">Contraseña:</label>
+      <input type="password" id="contrasena" name="contrasena" class="form-control" required>
+    </div>
+    <button type="submit" class="btn btn-gradient w-100" style="grid-column:1/-1;">Registrar</button>
+  </form>
+  <p class="text-center mt-3" style="grid-column:1/-1;">¿Ya tienes cuenta? <a href="/login">Inicia sesión</a></p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const form=document.getElementById("registerForm");
+const toastContainer=document.getElementById("toastContainer");
+function showMessage(msg,isError=false){
+  const toastEl=document.createElement('div');
+  toastEl.className='toast align-items-center text-bg-light border-0';
+  toastEl.setAttribute('role','alert');
+  toastEl.setAttribute('aria-live','assertive');
+  toastEl.setAttribute('aria-atomic','true');
+  toastEl.innerHTML=`<div class="d-flex"><div class="toast-body">${isError?'❌':'✅'} ${msg}</div><button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
+  toastContainer.appendChild(toastEl);
+  new bootstrap.Toast(toastEl,{delay:2000}).show();
+}
+form.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const cedula=document.getElementById("cedula").value.trim();
+  const nombre=document.getElementById("nombre").value.trim();
+  const apellido=document.getElementById("apellido").value.trim();
+  const genero=document.getElementById("genero").value;
+  const telefono=document.getElementById("telefono").value.trim();
+  const direccion=document.getElementById("direccion").value.trim();
+  const fecha_nacimiento=document.getElementById("fecha_nacimiento").value;
+  const correo=document.getElementById("correo").value.trim().toLowerCase();
+  const contrasena=document.getElementById("contrasena").value;
+  if(!cedula||!nombre||!apellido||!correo||!contrasena){showMessage("Completa todos los campos obligatorios",true);return;}
+  if(!/^\d{6,15}$/.test(cedula)){showMessage("Cédula inválida",true);return;}
+  if(telefono&&!/^\+?\d{7,15}$/.test(telefono)){showMessage("Teléfono inválido",true);return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)){showMessage("Correo inválido",true);return;}
+  if(!/^(?=.*[a-zA-Z])(?=.*\d).{6,}$/.test(contrasena)){showMessage("Contraseña insegura (mínimo 6 caracteres, letras y números)",true);return;}
+  try{
+    const res=await fetch("/registro",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cedula,nombre,apellido,genero,telefono,direccion,fecha_nacimiento,correo,contrasena})});
+    const data=await res.json();
+    if(res.ok&&data.ok){showMessage("Registro exitoso, redirigiendo al login...");setTimeout(()=>window.location.href="/login",2000);}
+    else{
+      if(data.error&&data.error.toLowerCase().includes("cedula"))showMessage("Cédula ya registrada",true);
+      else if(data.error&&data.error.toLowerCase().includes("correo"))showMessage("Correo ya registrado",true);
+      else showMessage(data.error||"Error en registro",true);
+    }
+  }catch{showMessage("Error al conectar con el servidor",true);}
+});
+if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/static/js/service-worker-registro.js').then(()=>console.log('SW registrado')).catch(console.error));}
+</script>
+</body>
+</html>

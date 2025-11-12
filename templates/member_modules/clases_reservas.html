@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clases y Reservas | GymApp</title>
+<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='uploads/icon.png') }}">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style_clases_reservas.css') }}">
+</head>
+<body>
+
+{% include 'navbar.html' %}
+
+<div id="main-content" class="container mt-4" style="margin-left:250px;">
+  <h2 class="mb-4 text-center">Clases y Reservas</h2>
+  <div class="d-flex gap-2 mb-3 flex-wrap">
+    <input type="text" id="buscarClase" class="form-control" placeholder="Buscar por disciplina o entrenador">
+    <select id="filtroDisciplina" class="form-select w-auto">
+      <option value="Todos">Todas las disciplinas</option>
+      <option value="Yoga">Yoga</option>
+      <option value="Crossfit">Crossfit</option>
+      <option value="Spinning">Spinning</option>
+    </select>
+    <select id="filtroHorario" class="form-select w-auto">
+      <option value="Todos">Todos los horarios</option>
+      <option value="Mañana">Mañana</option>
+      <option value="Tarde">Tarde</option>
+      <option value="Noche">Noche</option>
+    </select>
+    <button id="actualizarCalendario" class="btn btn-primary">Actualizar Calendario</button>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-bordered align-middle text-center">
+      <thead>
+        <tr>
+          <th>Disciplina</th>
+          <th>Entrenador</th>
+          <th>Horario</th>
+          <th>Cupos Disponibles</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tablaClases"></tbody>
+    </table>
+  </div>
+  <nav>
+    <ul id="pagination" class="pagination justify-content-center"></ul>
+  </nav>
+</div>
+
+<div id="toastContainer" class="position-fixed p-3 top-0 end-0"></div>
+
+{% include 'footer.html' %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const tablaClases = document.getElementById("tablaClases");
+  const buscar = document.getElementById("buscarClase");
+  const filtroDisciplina = document.getElementById("filtroDisciplina");
+  const filtroHorario = document.getElementById("filtroHorario");
+  const btnActualizar = document.getElementById("actualizarCalendario");
+  const toastContainer = document.getElementById("toastContainer");
+
+  function mostrarToast(mensaje, tipo="success") {
+    const color = tipo === "error" ? "bg-danger" : "bg-success";
+    const toast = document.createElement("div");
+    toast.className = `toast align-items-center text-white ${color} border-0 show`;
+    toast.role = "alert";
+    toast.innerHTML = `
+      <div class="d-flex">
+        <div class="toast-body">${mensaje}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>`;
+    toastContainer.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  async function cargarClases() {
+    try {
+      const res = await fetch("/clases_reservas");
+      const data = await res.json();
+      if (!data.ok) throw new Error();
+      renderClases(data.clases);
+    } catch {
+      mostrarToast("Error al cargar clases", "error");
+    }
+  }
+
+  function renderClases(clases) {
+    tablaClases.innerHTML = "";
+    const filtroTexto = buscar.value.toLowerCase();
+    const disciplinaSel = filtroDisciplina.value;
+    const horarioSel = filtroHorario.value;
+    const filtradas = clases.filter(c => {
+      const coincideTexto = c.disciplina?.toLowerCase().includes(filtroTexto) || c.entrenador?.toLowerCase().includes(filtroTexto);
+      const coincideDisciplina = disciplinaSel === "Todos" || c.disciplina === disciplinaSel;
+      const coincideHorario = horarioSel === "Todos" || c.horario === horarioSel;
+      return coincideTexto && coincideDisciplina && coincideHorario;
+    });
+    if (filtradas.length === 0) {
+      tablaClases.innerHTML = `<tr><td colspan="5">No hay clases disponibles</td></tr>`;
+      return;
+    }
+    filtradas.forEach(c => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${c.disciplina}</td>
+        <td>${c.entrenador}</td>
+        <td>${c.horario}</td>
+        <td>${c.cupos_disponibles}</td>
+        <td>
+          <button class="btn btn-success btn-sm" onclick="reservarClase('${c.id_clase}')">
+            <i class="bi bi-calendar-plus"></i> Reservar
+          </button>
+        </td>`;
+      tablaClases.appendChild(tr);
+    });
+  }
+
+  window.reservarClase = async function(idClase) {
+    try {
+      const res = await fetch("/clases_reservas", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({id_clase: idClase})
+      });
+      const data = await res.json();
+      if (data.ok) {
+        mostrarToast("Reserva realizada correctamente");
+        cargarClases();
+      } else {
+        mostrarToast("Error al reservar", "error");
+      }
+    } catch {
+      mostrarToast("Error de conexión al reservar", "error");
+    }
+  };
+
+  buscar.addEventListener("input", () => cargarClases());
+  filtroDisciplina.addEventListener("change", () => cargarClases());
+  filtroHorario.addEventListener("change", () => cargarClases());
+  btnActualizar.addEventListener("click", () => cargarClases());
+  cargarClases();
+});
+</script>
+
+</body>
+</html>
