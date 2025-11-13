@@ -26,14 +26,17 @@
     {% if user %}
       {% set rol_nombre = user['rol']['nombre_rol'] %}
       {% if rol_nombre == 'miembro' %}
+        <li><a href="/index_miembro" class="nav-link"><i class="bi bi-house-door me-2"></i>Inicio</a></li>
         <li><a href="/clases_reservas" class="nav-link"><i class="bi bi-calendar-check me-2"></i>Clases y Reservas</a></li>
         <li><a href="/progreso_entrenamiento" class="nav-link"><i class="bi bi-graph-up me-2"></i>Progreso Físico</a></li>
         <li><a href="/plan_nutricional" class="nav-link"><i class="bi bi-apple me-2"></i>Plan Nutricional</a></li>
         <li><a href="/feedback_clases" class="nav-link"><i class="bi bi-chat-dots me-2"></i>Soporte y Comunidad</a></li>
       {% elif rol_nombre == 'entrenador' %}
         <li><a href="/index_entrenador" class="nav-link"><i class="bi bi-house-door me-2"></i>Inicio</a></li>
-        <li><a href="/clases_entrenador" class="nav-link"><i class="bi bi-calendar-event me-2"></i>Mis Clases</a></li>
         <li><a href="/progreso_miembros" class="nav-link"><i class="bi bi-people me-2"></i>Progreso Miembros</a></li>
+        <li><a href="/clases_entrenador" class="nav-link"><i class="bi bi-calendar-event me-2"></i>Mis Clases</a></li>
+        <li><a href="/entrenamientos" class="nav-link"><i class="bi bi-lightning me-4"></i>Entrenamientos</a></li>
+        <li><a href="/evaluacion" class="nav-link"><i class="bi bi-graph-up-arrow me-2"></i>Evaluación de Progresos</a></li>
       {% elif rol_nombre == 'recepcionista' %}
         <li><a href="/index_recepcionista" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
         <li><a href="/gestionar_reservas" class="nav-link"><i class="bi bi-journal-check me-2"></i>Reservas</a></li>

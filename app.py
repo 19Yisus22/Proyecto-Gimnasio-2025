@@ -249,6 +249,24 @@ def cambiar_contrasena():
 def index_entrenador():
     return render_template("inicio.html", user=session.get("user"))
 
+@app.route("/clases_entrenador")
+def clases_entrenador():
+    return render_template("trainer_modules/clases_entrenador.html", user=session.get("user"))
+
+@app.route("/progreso_miembros")
+def progreso_miembros():
+    return render_template("trainer_modules/progreso_miembros.html", user=session.get("user"))
+
+@app.route("/entrenamientos")
+def entrenamientos():
+    return render_template("trainer_modules/entrenamientos_personalizados.html", user=session.get("user"))
+
+@app.route("/evaluacion")
+def evaluacion():
+    return render_template("trainer_modules/evaluacion_progreso.html", user=session.get("user"))
+
+
+
 @app.route("/index_recepcionista")
 def index_recepcionista():
     return render_template("inicio.html", user=session.get("user"))

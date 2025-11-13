@@ -3,149 +3,109 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Clases | GymApp</title>
+<title>Clases Grupales | GymApp</title>
 <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='uploads/icon.png') }}">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style_pedido.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style_clases_entrenador.css') }}">
+<script>const ID_USUARIO="{{ session['id_usuario'] if session.get('id_usuario') else '' }}";</script>
 </head>
-<body>
+<body class="d-flex flex-column min-vh-100 bg-dark-purple">
 
 {% include 'navbar.html' %}
 
-<div id="main-content" class="container mt-4" style="margin-left:250px;">
-  <h2 class="mb-4 text-center">Clases</h2>
-  <div class="d-flex gap-2 mb-3 flex-wrap">
-    <input type="text" id="buscarClase" class="form-control" placeholder="Buscar por disciplina o entrenador">
-    <select id="filtroDisciplina" class="form-select w-auto">
-      <option value="Todos">Todas las disciplinas</option>
-      <option value="Yoga">Yoga</option>
-      <option value="Crossfit">Crossfit</option>
-      <option value="Spinning">Spinning</option>
-    </select>
-    <select id="filtroHorario" class="form-select w-auto">
-      <option value="Todos">Todos los horarios</option>
-      <option value="Mañana">Mañana</option>
-      <option value="Tarde">Tarde</option>
-      <option value="Noche">Noche</option>
-    </select>
-    <button id="actualizarCalendario" class="btn btn-primary">Actualizar Calendario</button>
+<main class="container mt-4 flex-grow-1">
+  <h2 class="mb-4 text-center blog-intro">Clases Grupales</h2>
+
+  <div class="row g-4 mb-4">
+    <div class="col-md-4">
+      <div class="card p-3">
+        <h5 class="mb-3">Buscar Clase</h5>
+        <div class="input-group mb-2">
+          <input id="buscarClase" type="text" class="form-control" placeholder="Buscar por nombre o instructor">
+          <button id="btnBuscar" class="btn btn-primary"><i class="bi bi-search"></i></button>
+        </div>
+        <div class="mb-2">
+          <select id="filtroTipo" class="form-select">
+            <option value="todos">Todos</option>
+            <option value="yoga">Yoga</option>
+            <option value="crossfit">Crossfit</option>
+            <option value="spinning">Spinning</option>
+          </select>
+        </div>
+        <div class="text-center">
+          <button id="btnCrearClase" class="btn btn-outline-light w-100">Crear Nueva Clase</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-8">
+      <div class="card p-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5>Calendario de Clases</h5>
+          <div>
+            <button id="prevDay" class="btn btn-sm btn-outline-light"><i class="bi bi-chevron-left"></i></button>
+            <button id="nextDay" class="btn btn-sm btn-outline-light"><i class="bi bi-chevron-right"></i></button>
+          </div>
+        </div>
+        <div id="calendarioClases" class="calendar-grid"></div>
+      </div>
+    </div>
   </div>
-  <div class="table-responsive">
-    <table class="table table-bordered align-middle text-center">
-      <thead>
-        <tr>
-          <th>Disciplina</th>
-          <th>Entrenador</th>
-          <th>Horario</th>
-          <th>Cupos Disponibles</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody id="tablaClases"></tbody>
-    </table>
+
+  <div class="card p-4 mb-4">
+    <h5 class="mb-3">Lista de Participantes</h5>
+    <div class="table-responsive">
+      <table class="table table-bordered text-center">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Miembro ID</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tablaParticipantes"></tbody>
+      </table>
+    </div>
+    <div class="text-end mt-2">
+      <button id="btnExportarAsistencia" class="btn btn-outline-light btn-sm">
+        <i class="bi bi-file-earmark-arrow-down"></i> Exportar CSV
+      </button>
+    </div>
   </div>
-  <nav>
-    <ul id="pagination" class="pagination justify-content-center"></ul>
-  </nav>
+
+  <div class="card p-4 mb-4">
+    <h5 class="mb-3">Detalles de Clase</h5>
+    <form id="formDetalleClase" class="row g-3">
+      <div class="col-md-4">
+        <input id="claseTitulo" type="text" class="form-control" placeholder="Título de la clase" required>
+      </div>
+      <div class="col-md-2">
+        <input id="claseFecha" type="date" class="form-control" required>
+      </div>
+      <div class="col-md-2">
+        <input id="claseHora" type="time" class="form-control" required>
+      </div>
+      <div class="col-md-2">
+        <input id="claseCupos" type="number" class="form-control" placeholder="Cupos" required>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100">Guardar</button>
+      </div>
+      <div class="col-12">
+        <textarea id="claseDescripcion" class="form-control" placeholder="Descripción de la clase"></textarea>
+      </div>
+    </form>
+  </div>
+</main>
+
+<div class="footer-container mt-auto">
+  {% include 'footer.html' %}
 </div>
 
 <div id="toastContainer" class="position-fixed p-3 top-0 end-0"></div>
-
-{% include 'footer.html' %}
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const tablaClases = document.getElementById("tablaClases");
-  const buscar = document.getElementById("buscarClase");
-  const filtroDisciplina = document.getElementById("filtroDisciplina");
-  const filtroHorario = document.getElementById("filtroHorario");
-  const btnActualizar = document.getElementById("actualizarCalendario");
-  const toastContainer = document.getElementById("toastContainer");
-
-  function mostrarToast(mensaje, tipo="success") {
-    const color = tipo === "error" ? "bg-danger" : "bg-success";
-    const toast = document.createElement("div");
-    toast.className = `toast align-items-center text-white ${color} border-0 show`;
-    toast.role = "alert";
-    toast.innerHTML = `
-      <div class="d-flex">
-        <div class="toast-body">${mensaje}</div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-      </div>`;
-    toastContainer.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
-  }
-
-  async function cargarClases() {
-    try {
-      const res = await fetch("/clases_reservas");
-      const data = await res.json();
-      if (!data.ok) throw new Error();
-      renderClases(data.clases);
-    } catch {
-      mostrarToast("Error al cargar clases", "error");
-    }
-  }
-
-  function renderClases(clases) {
-    tablaClases.innerHTML = "";
-    const filtroTexto = buscar.value.toLowerCase();
-    const disciplinaSel = filtroDisciplina.value;
-    const horarioSel = filtroHorario.value;
-    const filtradas = clases.filter(c => {
-      const coincideTexto = c.disciplina?.toLowerCase().includes(filtroTexto) || c.entrenador?.toLowerCase().includes(filtroTexto);
-      const coincideDisciplina = disciplinaSel === "Todos" || c.disciplina === disciplinaSel;
-      const coincideHorario = horarioSel === "Todos" || c.horario === horarioSel;
-      return coincideTexto && coincideDisciplina && coincideHorario;
-    });
-    if (filtradas.length === 0) {
-      tablaClases.innerHTML = `<tr><td colspan="5">No hay clases disponibles</td></tr>`;
-      return;
-    }
-    filtradas.forEach(c => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${c.disciplina}</td>
-        <td>${c.entrenador}</td>
-        <td>${c.horario}</td>
-        <td>${c.cupos_disponibles}</td>
-        <td>
-          <button class="btn btn-success btn-sm" onclick="reservarClase('${c.id_clase}')">
-            <i class="bi bi-calendar-plus"></i> Reservar
-          </button>
-        </td>`;
-      tablaClases.appendChild(tr);
-    });
-  }
-
-  window.reservarClase = async function(idClase) {
-    try {
-      const res = await fetch("/clases_reservas", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({id_clase: idClase})
-      });
-      const data = await res.json();
-      if (data.ok) {
-        mostrarToast("Reserva realizada correctamente");
-        cargarClases();
-      } else {
-        mostrarToast("Error al reservar", "error");
-      }
-    } catch {
-      mostrarToast("Error de conexión al reservar", "error");
-    }
-  };
-
-  buscar.addEventListener("input", () => cargarClases());
-  filtroDisciplina.addEventListener("change", () => cargarClases());
-  filtroHorario.addEventListener("change", () => cargarClases());
-  btnActualizar.addEventListener("click", () => cargarClases());
-  cargarClases();
-});
-</script>
-
+<script src="{{ url_for('static', filename='js/clases_grupales.js') }}"></script>
 </body>
 </html>
