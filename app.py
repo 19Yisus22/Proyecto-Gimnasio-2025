@@ -139,6 +139,10 @@ def logout():
 def index_miembro():
     return render_template("inicio.html", user=session.get("user"))
 
+@app.route("/miembros_modulos_render/<modulo>")
+def miembros_modulos_render(modulo):
+    return render_template(f"member_modules/{modulo}.html", user=session.get("user"))
+
 @app.route("/clases_reservas", methods=["GET","POST"])
 def clases_reservas():
     if request.method=="GET":
@@ -146,7 +150,9 @@ def clases_reservas():
             clases = supabase.table("clases").select("*").execute()
             reservas = supabase.table("reservas").select("*").execute()
             return jsonify({"ok": True, "clases": getattr(clases,"data",[]), "reservas": getattr(reservas,"data",[])})
+
         return render_template("member_modules/clases_reservas.html", user=session.get("user"))
+
     data = request.get_json()
     insert = supabase.table("reservas").insert(data).execute()
     return jsonify(insert.data), 201
@@ -157,7 +163,9 @@ def plan_nutricional():
         if request.headers.get("Accept")=="application/json":
             planes = supabase.table("planes_nutricion").select("*").execute()
             return jsonify({"ok": True, "planes": getattr(planes,"data",[])})
+
         return render_template("member_modules/plan_nutricional.html", user=session.get("user"))
+
     data = request.get_json()
     insert = supabase.table("planes_nutricion").insert(data).execute()
     return jsonify(insert.data), 201
@@ -168,7 +176,9 @@ def progreso_entrenamiento():
         if request.headers.get("Accept")=="application/json":
             progreso = supabase.table("progreso").select("*").execute()
             return jsonify({"ok": True, "progreso": getattr(progreso,"data",[])})
+
         return render_template("member_modules/progreso_entrenamiento.html", user=session.get("user"))
+
     data = request.get_json()
     insert = supabase.table("progreso").insert(data).execute()
     return jsonify(insert.data), 201
@@ -188,6 +198,7 @@ def feedback_clases():
             data["id_comentario"] = str(uuid.uuid4())
             data["fecha_creacion"] = datetime.now().isoformat()
             supabase.table("feedback_clases").insert(data).execute()
+
         return render_template("member_modules/soporte.html", user=user)
 
     if request.method == "DELETE":
@@ -195,6 +206,7 @@ def feedback_clases():
         id_comentario = data.get("id_comentario") if data else None
         if id_comentario:
             supabase.table("feedback_clases").delete().eq("id_comentario", id_comentario).execute()
+
         return render_template("member_modules/soporte.html", user=user)
 
 # MODULO PERFIL - ARREGLAR
@@ -245,25 +257,87 @@ def cambiar_contrasena():
 
 
 
+# MODULO DE ENTRENAMIENTOS - ENTRENADOR
+
 @app.route("/index_entrenador")
 def index_entrenador():
     return render_template("inicio.html", user=session.get("user"))
+
+@app.route("/entrenador_modulos_render/<modulo>")
+def entrenador_modulos_render(modulo):
+    return render_template(f"trainer_modules/{modulo}.html", user=session.get("user"))
 
 @app.route("/clases_entrenador")
 def clases_entrenador():
     return render_template("trainer_modules/clases_entrenador.html", user=session.get("user"))
 
+
+
+
+
+# MODULO DE PROGRESO DE MIEMBROS - ENTRENADOR
+
 @app.route("/progreso_miembros")
 def progreso_miembros():
     return render_template("trainer_modules/progreso_miembros.html", user=session.get("user"))
 
-@app.route("/entrenamientos")
-def entrenamientos():
-    return render_template("trainer_modules/entrenamientos_personalizados.html", user=session.get("user"))
+@app.route("/miembros_progreso")
+def miembros_progreso():
+    miembros_data = supabase.table("usuarios").select(
+        "id_usuario,nombre,apellido,roles(nombre_rol),progreso(id_progreso,peso,imc,calorias_quemadas,fecha),entrenamientos_personales!entrenamientos_personales_id_miembro_fkey(id_entrenador)"
+    ).execute()
+    miembros = []
+    for m in miembros_data.data:
+        historial = m.get("progreso", [])
+        ultimo = max(historial, key=lambda x: x["fecha"], default={})
+        entrenador_nombre = ""
+        if m.get("entrenamientos_personales"):
+            entrenador_id = m["entrenamientos_personales"][0].get("id_entrenador")
+            if entrenador_id:
+                entrenador_data = supabase.table("usuarios").select("nombre,apellido").eq("id_usuario", entrenador_id).execute()
+                if entrenador_data.data:
+                    entrenador_nombre = f'{entrenador_data.data[0]["nombre"]} {entrenador_data.data[0]["apellido"]}'
+        miembros.append({
+            "id": m["id_usuario"],
+            "nombre": f'{m["nombre"]} {m["apellido"]}',
+            "disciplina": "",
+            "entrenador": entrenador_nombre,
+            "peso": ultimo.get("peso", 0),
+            "imc": ultimo.get("imc", 0),
+            "calorias": ultimo.get("calorias_quemadas", 0),
+            "metas_alcanzadas": "50%",
+            "ultima_sesion": ultimo.get("fecha", "")
+        })
+    return jsonify({"ok": True, "miembros": miembros})
 
-@app.route("/evaluacion")
-def evaluacion():
-    return render_template("trainer_modules/evaluacion_progreso.html", user=session.get("user"))
+@app.route("/miembro_detalle/<id>")
+def miembro_detalle(id):
+    historial_data = supabase.table("progreso").select(
+        "fecha,peso,imc,calorias_quemadas"
+    ).eq("id_miembro", id).order("fecha", ascending=True).execute()
+    historial = historial_data.data
+    if historial:
+        for h in historial:
+            h["calorias"] = h.pop("calorias_quemadas", 0)
+        return jsonify({"ok": True, "historial": historial})
+    return jsonify({"ok": False})
+
+@app.route("/registrar_metricas", methods=["POST"])
+def registrar_metricas():
+    data = request.get_json()
+    supabase.table("progreso").insert({
+        "id_miembro": data["id"],
+        "fecha": datetime.now().isoformat(),
+        "peso": float(data["peso"]),
+        "imc": float(data["imc"]),
+        "calorias_quemadas": int(data["calorias"]),
+        "notas": data.get("observaciones", "")
+    }).execute()
+    return jsonify({"ok": True})
+
+
+
+
 
 
 
@@ -271,17 +345,30 @@ def evaluacion():
 def index_recepcionista():
     return render_template("inicio.html", user=session.get("user"))
 
+@app.route("/recepcionista_modulos_render/<modulo>")
+def recepcionista_modulos_render(modulo):
+    return render_template(f"receptionist_modules/{modulo}.html", user=session.get("user"))
+
+
+
+
 @app.route("/index_nutricionista")
 def index_nutricionista():
     return render_template("inicio.html", user=session.get("user"))
+
+@app.route("/nutricionista_modulos_render/<modulo>")
+def nutricionista_modulos_render(modulo):
+    return render_template(f"nutritionist_modules/{modulo}.html", user=session.get("user"))
+
+# MODULO ADMINISTRADOR
 
 @app.route("/index_admin")
 def index_admin():
     return render_template("inicio.html", user=session.get("user"))
 
-@app.route("/admin/<modulo>")
-def admin_modulos(modulo):
-    return render_template(f"administrator_modules/{modulo}.html", user=session.get("user"))
+@app.route("/admin_modulos_render/<modulo>")
+def admin_modulos_render(modulo):
+    return render_template(f"admin_modules/{modulo}.html", user=session.get("user"))
 
 if __name__=="__main__":
     app.run(debug=True, port=3000)

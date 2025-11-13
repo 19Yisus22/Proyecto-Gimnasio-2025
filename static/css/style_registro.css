@@ -45,7 +45,7 @@ body {
 
 input.form-control, textarea.form-control, select.form-select {
     background-color: #2e2d2d;
-    color: #fff;
+    color: #000000;
     border: 1px solid #555;
     width: 100%;
     box-sizing: border-box;
@@ -55,7 +55,6 @@ input.form-control, textarea.form-control, select.form-select {
 input.form-control:focus, textarea.form-control:focus, select.form-select:focus {
     border-color: #e67e22;
     box-shadow: 0 0 8px rgba(230,126,34,0.6);
-    color: #fff;
 }
 
 button.btn-gradient {

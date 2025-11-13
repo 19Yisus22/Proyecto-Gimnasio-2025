@@ -27,29 +27,30 @@
       {% set rol_nombre = user['rol']['nombre_rol'] %}
       {% if rol_nombre == 'miembro' %}
         <li><a href="/index_miembro" class="nav-link"><i class="bi bi-house-door me-2"></i>Inicio</a></li>
-        <li><a href="/clases_reservas" class="nav-link"><i class="bi bi-calendar-check me-2"></i>Clases y Reservas</a></li>
-        <li><a href="/progreso_entrenamiento" class="nav-link"><i class="bi bi-graph-up me-2"></i>Progreso Físico</a></li>
-        <li><a href="/plan_nutricional" class="nav-link"><i class="bi bi-apple me-2"></i>Plan Nutricional</a></li>
-        <li><a href="/feedback_clases" class="nav-link"><i class="bi bi-chat-dots me-2"></i>Soporte y Comunidad</a></li>
+        <li><a href="/miembros_modulos_render/clases_reservas" class="nav-link"><i class="bi bi-calendar-check me-2"></i>Clases y Reservas</a></li>
+        <li><a href="/miembros_modulos_render/progreso_entrenamiento" class="nav-link"><i class="bi bi-graph-up me-2"></i>Progreso Físico</a></li>
+        <li><a href="/miembros_modulos_render/plan_nutricional" class="nav-link"><i class="bi bi-apple me-2"></i>Plan Nutricional</a></li>
+        <li><a href="/miembros_modulos_render/soporte" class="nav-link"><i class="bi bi-chat-dots me-2"></i>Soporte y Comunidad</a></li>
       {% elif rol_nombre == 'entrenador' %}
         <li><a href="/index_entrenador" class="nav-link"><i class="bi bi-house-door me-2"></i>Inicio</a></li>
-        <li><a href="/progreso_miembros" class="nav-link"><i class="bi bi-people me-2"></i>Progreso Miembros</a></li>
-        <li><a href="/clases_entrenador" class="nav-link"><i class="bi bi-calendar-event me-2"></i>Mis Clases</a></li>
-        <li><a href="/entrenamientos" class="nav-link"><i class="bi bi-lightning me-4"></i>Entrenamientos</a></li>
-        <li><a href="/evaluacion" class="nav-link"><i class="bi bi-graph-up-arrow me-2"></i>Evaluación de Progresos</a></li>
+        <li><a href="/entrenador_modulos_render/clases_entrenador" class="nav-link"><i class="bi bi-calendar-event me-2"></i>Mis Clases</a></li>
+        <li><a href="/entrenador_modulos_render/entrenamientos_personalizados" class="nav-link"><i class="bi bi-lightning me-4"></i>Entrenamientos Personalizados</a></li>
+        <li><a href="/entrenador_modulos_render/progreso_miembros" class="nav-link"><i class="bi bi-people me-2"></i>Progreso Miembros</a></li>
+        <li><a href="/entrenador_modulos_render/evaluacion_progreso" class="nav-link"><i class="bi bi-graph-up-arrow me-2"></i>Evaluación de Progresos</a></li>
       {% elif rol_nombre == 'recepcionista' %}
         <li><a href="/index_recepcionista" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
-        <li><a href="/gestionar_reservas" class="nav-link"><i class="bi bi-journal-check me-2"></i>Reservas</a></li>
-        <li><a href="/pagos" class="nav-link"><i class="bi bi-cash-coin me-2"></i>Pagos</a></li>
-      {% elif rol_nombre == 'administrador' %}
-        <li><a href="/index_admin" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
-        <li><a href="/admin/usuarios_roles" class="nav-link"><i class="bi bi-people me-2"></i>Usuarios</a></li>
-        <li><a href="/admin/reportes_analisis" class="nav-link"><i class="bi bi-bar-chart-line me-2"></i>Reportes</a></li>
-        <li><a href="/admin/config_sistema" class="nav-link"><i class="bi bi-gear me-2"></i>Configuración</a></li>
+        <li><a href="/recepcionista_modulos_render/gestion_reservas" class="nav-link"><i class="bi bi-journal-check me-2"></i>Reservas</a></li>
+        <li><a href="/recepcionista_modulos_render/gestion_miembros" class="nav-link"><i class="bi bi-cash-coin me-2"></i>Miembros</a></li>
+        <li><a href="/recepcionista_modulos_render/gestion_pagos" class="nav-link"><i class="bi bi-cash-coin me-2"></i>Pagos</a></li>
       {% elif rol_nombre == 'nutricionista' %}
         <li><a href="/index_nutricionista" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
-        <li><a href="/planes_nutricionales" class="nav-link"><i class="bi bi-apple me-2"></i>Planes Asignados</a></li>
-        <li><a href="/mensajes_miembros" class="nav-link"><i class="bi bi-chat-left-dots me-2"></i>Mensajes</a></li>
+        <li><a href="/nutricionista_modulos_render/planes_nutricionales" class="nav-link"><i class="bi bi-apple me-2"></i>Planes Asignados</a></li>
+        <li><a href="/nutricionista_modulos_render/comunicacion_nutricionista" class="nav-link"><i class="bi bi-chat-left-dots me-2"></i>Mensajes</a></li>
+      {% elif rol_nombre == 'administrador' %}
+        <li><a href="/index_admin" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
+        <li><a href="/admin_modulos_render/usuarios_roles" class="nav-link"><i class="bi bi-people me-2"></i>Usuarios</a></li>
+        <li><a href="/admin_modulos_render/reportes_analisis" class="nav-link"><i class="bi bi-bar-chart-line me-2"></i>Reportes</a></li>
+        <li><a href="/admin_modulos_render/config_sistema" class="nav-link"><i class="bi bi-gear me-2"></i>Configuración</a></li>
       {% endif %}
     {% else %}
       <li><a href="{{ url_for('index') }}" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
