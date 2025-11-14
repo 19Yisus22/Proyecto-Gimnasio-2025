@@ -1,0 +1,118 @@
+html, body {height:100%; margin:0; padding:0;}
+body {
+    background: linear-gradient(135deg, #3e226f, #5a2ea6);
+    color: #fff;
+    font-family: 'Arial', sans-serif;
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+    scroll-behavior: smooth;
+}
+.content-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 2rem 0;
+}
+.main-container {
+    max-width: 1400px;
+    width: 95%;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.card-title-center {
+    width: 100%;
+    padding: 1.5rem 2rem;
+    background: rgba(47, 47, 47, 0.85);
+    border-radius: 15px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    text-align: center;
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #2a0643;
+    opacity: 0;
+    transform: translateX(-100%);
+    animation: slideInLeft 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+.container-widgets {
+    background-color: #ffffff;
+    border-radius: 15px;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.search-container {
+    background-color: #d3d3d3;
+    border-radius: 15px;
+    padding: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+}
+.card, .detalle-card, .usuario-card {
+    border:none;
+    border-radius:15px;
+    box-shadow:0 8px 25px rgba(0,0,0,0.5);
+    background: rgba(47, 47, 47, 0.85);
+    padding:1.5rem;
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
+    text-align:center;
+    animation: slideIn 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+.card:hover, .detalle-card:hover, .usuario-card:hover {transform:translateY(-5px); box-shadow:0 12px 30px rgba(0,0,0,0.6);}
+@keyframes slideIn {0%{transform:translateY(-50px);opacity:0;}100%{transform:translateY(0);opacity:1;}}
+@keyframes slideInLeft {0% { transform: translateX(-100%); opacity: 0; } 100% { transform: translateX(0); opacity: 1; }}
+input.form-control, textarea.form-control, select.form-select {
+    background: white;
+    color: #000;
+    border:1px solid #ccc;
+    transition: all 0.3s ease;
+    border-radius:10px;
+}
+input.form-control::placeholder, textarea.form-control::placeholder {color: #555;}
+input.form-control:focus, textarea.form-control:focus, select.form-select:focus {
+    border-color:#d354ff;
+    box-shadow:0 0 12px rgba(142,197,252,0.6);
+    color:#000;
+}
+button.btn-primary, button.btn-secondary, button.btn-success, button.btn-info, button.btn-warning {
+    border:none;
+    transition: all 0.3s ease;
+    border-radius:12px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    color:#fff;
+}
+button.btn-primary {background: linear-gradient(135deg, #7f5af0, #d76cf8);}
+button.btn-primary:hover {transform: translateY(-3px) scale(1.02); box-shadow: 0 6px 20px rgba(142,197,252,0.5); background: linear-gradient(135deg, #9f7cf0, #e6a0ff);}
+button.btn-secondary {background: linear-gradient(135deg, #6c757d, #8a8d91);}
+button.btn-secondary:hover {transform: translateY(-2px) scale(1.02);}
+button.btn-success {background: linear-gradient(135deg, #28a745, #5ac05a);}
+button.btn-success:hover {transform: translateY(-2px) scale(1.02);}
+button.btn-info {background: linear-gradient(135deg, #17a2b8, #5bc0de);}
+button.btn-info:hover {transform: translateY(-2px) scale(1.02);}
+button.btn-warning {background: linear-gradient(135deg, #ff0707, #e1bb23); color:#ffffff;}
+button.btn-warning:hover {transform: translateY(-2px) scale(1.02);}
+.detalle-card {display:flex; flex-direction:column; gap:1rem; border-radius:15px; background-color:#d3d3d3;}
+.detalle-card img {width:40px; height:40px; border-radius:50%; object-fit:cover;}
+.detalle-card h5, .detalle-card p {margin:0;}
+.chart-container {
+    border-radius:15px;
+    background-color:#d3d3d3;
+    padding:1rem;
+    box-shadow:0 8px 25px rgba(0,0,0,0.5);
+}
+.table-responsive {border-radius:15px; overflow:hidden;}
+.reporte-table {
+    background: rgba(255,255,255,0.05);
+    color:#fff;
+}
+.reporte-table th, .reporte-table td {vertical-align: middle; text-align:center; color:#fff;}
+.reporte-table thead {background: rgba(28,28,28,0.8);}
+input.form-control:disabled, textarea.form-control:disabled, select.form-select:disabled {color:#888; background-color: rgba(255,255,255,0.2);}
+h1,h2,h3,h4,h5,h6,p,span,label,a {color:#fff; transition: color 0.3s ease;}
+.usuario-card {margin:0.5rem; flex: 1 1 150px; display:flex; flex-direction:column; align-items:center; padding:0.8rem; text-align:center;}
+.usuario-card img {width:60px; height:60px; border-radius:50%; object-fit:cover; margin-bottom:0.5rem;}
+.usuario-card h5, .usuario-card p {margin:0;}
