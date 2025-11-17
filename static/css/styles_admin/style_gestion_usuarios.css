@@ -9,22 +9,23 @@ body {
     scroll-behavior: smooth;
 }
 .container-central {
-    max-width: 1400px;
-    width: 95%;
+    max-width: 1590px;
+    width: 100%;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
 }
-.card {
-    border:none;
-    border-radius:15px;
-    box-shadow:0 8px 25px rgba(0,0,0,0.5);
-    background: rgba(47, 47, 47, 0.85);
-    padding:2rem;
-    transition: transform 0.4s ease, box-shadow 0.4s ease;
-    text-align:center;
-    animation: slideIn 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+.card-title-center {
+    width: 100%;
+    padding: 2rem 3rem;
+    background: #2c0d46;
+    border-radius: 25px;
+    box-shadow: 0 12px 35px rgba(0,0,0,0.6);
+    text-align: center;
+    font-size: 2rem;
+    font-weight: bold;
+    color: #fff;
 }
 .card:hover {transform:translateY(-5px); box-shadow:0 12px 30px rgba(0,0,0,0.6);}
 @keyframes slideIn {0%{transform:translateY(-50px);opacity:0;}100%{transform:translateY(0);opacity:1;}}
@@ -98,15 +99,14 @@ button.btn-outline-light:hover {
 h1,h2,h3,h4,h5,h6,p,span,label,a {color:#fff; transition: color 0.3s ease;}
 .blog-intro {text-align:center; margin-bottom:1.5rem; color:#fff; background-color: rgba(28,28,28,0.8); padding:1rem; border-radius:12px; transition: all 0.3s ease;}
 input.form-control:disabled, textarea.form-control:disabled, select.form-select:disabled {color:#888; background-color: rgba(255,255,255,0.2);}
-
 .card-title-center {
     width: 100%;
-    padding: 1.5rem 2rem;
-    background: rgba(47, 47, 47, 0.85);
+    padding: 2rem 2rem;
+    background: #2c0d46;
     border-radius: 15px;
     box-shadow: 0 8px 25px rgba(0,0,0,0.5);
     text-align: center;
-    font-size: 1.8rem;
+    font-size: 2.5rem;
     font-weight: bold;
     color: #fff;
     opacity: 0;

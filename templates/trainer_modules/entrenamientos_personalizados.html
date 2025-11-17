@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entrenamientos Personalizados | Entrenador</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/styles_trainer/style_entrenamientos_personalizados.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+{% include 'navbar.html' %}
+
+<div class="content-wrapper">
+<div class="container-central">
+
+<div class="card-title-center mb-4">Gestión de Entrenamientos Personalizados</div>
+
+<div class="card mb-3">
+<div class="card-body">
+<h5>Seleccionar Miembro</h5>
+<div class="row g-2">
+<div class="col-md-6">
+<select id="selectMiembro" class="form-control">
+<option value="">Selecciona un miembro...</option>
+</select>
+</div>
+<div class="col-md-6">
+<button class="btn btn-primary w-100" id="btnCargarDatos">Cargar Datos</button>
+</div>
+</div>
+</div>
+</div>
+
+<div class="card mb-3">
+<div class="card-body">
+<h5>Información del Miembro</h5>
+<div style="color: black;" id="infoMiembro" class="p-3"></div>
+</div>
+</div>
+
+<div class="card mb-3">
+<div class="card-body">
+<h5>Promedio de Calificaciones</h5>
+<div class="progress mb-2">
+<div id="barraSatisfaccion" class="progress-bar" style="width:0%">0%</div>
+</div>
+<div id="calificacionesTexto" class="mb-2"></div>
+</div>
+</div>
+
+<div class="card mb-3">
+<div class="card-body">
+<h5>Estado de Salud, Lesiones y Riesgos</h5>
+<div class="row g-2">
+<div class="col-md-8">
+<textarea id="riesgosSalud" class="form-control" rows="3" placeholder="Escribe notas de salud, lesiones, alergias o riesgos del miembro"></textarea>
+</div>
+<div class="col-md-4">
+<button id="btnGuardarRiesgos" class="btn btn-danger w-100">Guardar Estado de Salud</button>
+</div>
+</div>
+<div class="mt-2 d-flex justify-content-between">
+<button class="btn btn-primary btn-sm" onclick="cambiarPagina('salud','prev')">Anterior</button>
+<button class="btn btn-primary btn-sm" onclick="cambiarPagina('salud','next')">Siguiente</button>
+</div>
+<div id="alertasRiesgo" class="mt-3"></div>
+</div>
+</div>
+
+<div class="card mb-3">
+<div class="card-body">
+<h5>Plan de Entrenamiento Personalizado</h5>
+<div class="row g-2">
+<div class="col-12">
+<textarea id="planObjetivo" class="form-control" rows="2" placeholder="Descripción del objetivo del plan (ej: bajar grasa, aumentar masa muscular)"></textarea>
+</div>
+<div class="col-md-3"><input type="number" id="planSemanas" class="form-control" placeholder="Duración en semanas"></div>
+<div class="col-md-3"><input type="number" id="planFrecuencia" class="form-control" placeholder="Sesiones por semana"></div>
+<div class="col-md-3">
+<select id="planCategoria" class="form-control">
+<option value="principiante">Principiante</option>
+<option value="intermedio">Intermedio</option>
+<option value="avanzado">Avanzado</option>
+</select>
+</div>
+<div class="col-md-3">
+<button class="btn btn-info w-100" id="btnCrearPlan">Crear Plan</button>
+</div>
+<div class="col-12 mt-3">
+<h6>Planes Activos</h6>
+<div class="mb-2">
+<button class="btn btn-outline-secondary btn-sm me-1" onclick="filtrarPlanes('recientes')">Recientes</button>
+<button class="btn btn-outline-secondary btn-sm me-1" onclick="filtrarPlanes('estaSemana')">Esta Semana</button>
+<button class="btn btn-outline-secondary btn-sm me-1" onclick="filtrarPlanes('mes')">Mes</button>
+<button class="btn btn-outline-secondary btn-sm" onclick="filtrarPlanes('ultimos6Meses')">Últimos 6 meses</button>
+</div>
+<div id="listaPlanes" class="d-flex flex-column gap-2"></div>
+<div class="mt-2 d-flex justify-content-between">
+<button class="btn btn-primary btn-sm" onclick="cambiarPagina('planes','prev')">Anterior</button>
+<button class="btn btn-primary btn-sm" onclick="cambiarPagina('planes','next')">Siguiente</button>
+</div>
+</div>
+</div>
+</div>
+
+<div class="card mb-3">
+<div class="card-body">
+<h5>Seguimiento Diario</h5>
+<div class="row g-2">
+<div class="col-md-3"><input type="number" id="peso" class="form-control" placeholder="Peso actual (kg)"></div>
+<div class="col-md-3"><input type="number" id="grasa" class="form-control" placeholder="Porcentaje de grasa (%)"></div>
+<div class="col-md-3"><input type="number" id="musculo" class="form-control" placeholder="Masa muscular (kg)"></div>
+<div class="col-md-3"><textarea id="notasPrivadas" class="form-control" placeholder="Notas privadas del entrenador"></textarea></div>
+<div class="col-12 mt-2">
+<button class="btn btn-dark w-100" id="btnRegistrarSeguimiento">Registrar Seguimiento</button>
+</div>
+</div>
+<div class="mt-3">
+<h6>Historial de Seguimiento</h6>
+<div class="mb-2">
+<button class="btn btn-outline-secondary btn-sm me-1" onclick="filtrarSeguimiento('recientes')">Recientes</button>
+<button class="btn btn-outline-secondary btn-sm me-1" onclick="filtrarSeguimiento('estaSemana')">Esta Semana</button>
+<button class="btn btn-outline-secondary btn-sm me-1" onclick="filtrarSeguimiento('mes')">Mes</button>
+<button class="btn btn-outline-secondary btn-sm" onclick="filtrarSeguimiento('ultimos6Meses')">Últimos 6 meses</button>
+</div>
+<div id="historialSeguimiento" class="d-flex flex-column gap-2"></div>
+<div class="mt-2 d-flex justify-content-between">
+<button class="btn btn-primary btn-sm" onclick="cambiarPagina('seguimiento','prev')">Anterior</button>
+<button class="btn btn-primary btn-sm" onclick="cambiarPagina('seguimiento','next')">Siguiente</button>
+</div>
+</div>
+<div class="mt-3">
+<h6>Gráfico de Progreso Combinado</h6>
+<canvas id="graficoProgreso"></canvas>
+</div>
+</div>
+</div>
+
+<div class="card mb-4">
+<div class="card-body">
+<h5>Feedback del Entrenador</h5>
+<div class="row g-2">
+<div class="col-md-9">
+<textarea id="feedbackMensaje" class="form-control" rows="2" placeholder="Escribe un mensaje de feedback para el miembro"></textarea>
+</div>
+<div class="col-md-3">
+<button id="btnCrearFeedback" class="btn btn-success w-100">Enviar Feedback</button>
+</div>
+<div class="col-12 mt-3">
+<h6>Historial de Feedback</h6>
+<div id="listaFeedback" class="d-flex flex-column gap-2"></div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+
+<div class="modal fade" id="modalFeedback" tabindex="-1">
+<div class="modal-dialog modal-dialog-centered">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Feedback</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<div id="modalView">
+<p id="modalMensaje" class="fw-bold"></p>
+<p id="modalRespuesta" class="text-secondary"></p>
+<div class="d-flex justify-content-between mt-3">
+<button id="btnEditarFeedback" class="btn btn-warning w-50 me-2">Editar</button>
+<button id="btnEliminarFeedback" class="btn btn-danger w-50">Eliminar</button>
+</div>
+</div>
+<div id="modalEdit" class="d-none">
+<textarea id="inputEditarMensaje" class="form-control" rows="3"></textarea>
+<div class="d-flex justify-content-between mt-3">
+<button id="btnGuardarEdicion" class="btn btn-success w-50 me-2">Guardar</button>
+<button class="btn btn-secondary w-50" data-bs-dismiss="modal">Cancelar</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<script>
+const apiMiembros="/api/miembros";
+const apiMiembro="/api/miembro/";
+const apiPlanes="/api/planes";
+const apiListarPlanes="/api/planes/";
+const apiProgreso="/api/progreso";
+const apiListarProgreso="/api/progreso/";
+const apiRiesgos="/api/estado_salud";
+const apiRiesgosListar="/api/estado_salud/";
+const apiFeedback="/api/feedback";
+const rolActual="{{ session['rol'] }}";
+const idUsuarioActual="{{ session['id_usuario'] }}";
+let paginaPlanes=0,paginaSeguimiento=0,paginaSalud=0,registroMax=10;
+let planesData=[],planesDataOriginal=[],seguimientoData=[],seguimientoDataOriginal=[],saludData=[],saludDataOriginal=[];
+let editPlanId=null,editSeguimientoId=null,editFeedbackId=null;
+let graficoProgreso=null;
+
+document.addEventListener("DOMContentLoaded",()=>{
+document.getElementById("btnCargarDatos").onclick=cargarDatosMiembro;
+document.getElementById("btnCrearPlan").onclick=crearPlan;
+document.getElementById("btnRegistrarSeguimiento").onclick=registrarSeguimiento;
+document.getElementById("btnGuardarRiesgos").onclick=guardarRiesgos;
+document.getElementById("btnCrearFeedback").onclick=crearFeedback;
+cargarMiembros();
+});
+
+async function cargarMiembros(){
+const r=await fetch(apiMiembros);
+const d=await r.json();
+const s=document.getElementById("selectMiembro");
+s.innerHTML="";
+d.forEach(x=>{
+const o=document.createElement("option");
+o.value=x.id_usuario;
+o.textContent=x.nombre+" "+x.apellido;
+s.appendChild(o);
+});
+}
+
+async function cargarDatosMiembro(){
+const id=document.getElementById("selectMiembro").value;
+if(!id) return;
+const r=await fetch(apiMiembro+id);
+const d=await r.json();
+document.getElementById("infoMiembro").innerHTML=`Nombre: ${d.nombre} ${d.apellido}<br>Género: ${d.genero}<br>Correo: ${d.correo}<br>Teléfono: ${d.telefono}<br>Dirección: ${d.direccion}<br>Cédula: ${d.cedula}<br>Fecha de nacimiento: ${d.fecha_nacimiento}`;
+await cargarPlanes(id);
+await cargarSeguimiento(id);
+await cargarRiesgos(id);
+await cargarFeedback(id);
+await cargarCalificaciones(id);
+}
+
+async function cargarCalificaciones(id){
+const r=await fetch(apiFeedback+"/"+id);
+const d=await r.json();
+let total=d.length;
+let buenas=d.filter(f=>f.calificacion>=4).length;
+let porcentaje=total?Math.round((buenas/total)*100):0;
+document.getElementById("barraSatisfaccion").style.width=porcentaje+"%";
+document.getElementById("barraSatisfaccion").textContent=porcentaje+"%";
+document.getElementById("calificacionesTexto").textContent=`Buenas: ${buenas} / Total: ${total}`;
+}
+
+async function crearPlan(){
+const id=document.getElementById("selectMiembro").value;
+if(!id) return;
+let idEntrenador=rolActual==='entrenador'?idUsuarioActual:null;
+const body={id_miembro:id,id_entrenador:idEntrenador,descripcion:planObjetivo.value,categoria:planCategoria.value,semanas:planSemanas.value,frecuencia:planFrecuencia.value};
+if(editPlanId){
+await fetch(`${apiPlanes}/${editPlanId}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+editPlanId=null;
+document.getElementById("btnCrearPlan").textContent="Crear Plan";
+}else{
+await fetch(apiPlanes,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+}
+await cargarPlanes(id);
+planObjetivo.value="";
+planSemanas.value="";
+planFrecuencia.value="";
+planCategoria.value="principiante";
+}
+
+async function cargarPlanes(id){
+const r=await fetch(apiListarPlanes+id);
+planesDataOriginal=await r.json();
+planesData=[...planesDataOriginal];
+paginaPlanes=0;
+renderPlanes();
+}
+
+function renderPlanes(){
+const c=document.getElementById("listaPlanes");
+c.innerHTML="";
+let start=paginaPlanes*registroMax;
+let end=start+registroMax;
+planesData.slice(start,end).forEach(x=>{
+const e=document.createElement("div");
+e.className="border p-2 rounded d-flex justify-content-between align-items-center";
+e.innerHTML=`<span>${x.objetivo||x.descripcion} (${x.categoria||"-"})</span><div><button class="btn btn-sm btn-warning me-1" onclick="editarPlan('${x.id_plan}')">Editar</button><button class="btn btn-sm btn-danger" onclick="eliminarPlan('${x.id_plan}')">Eliminar</button></div>`;
+c.appendChild(e);
+});
+}
+
+function cambiarPagina(seccion,direccion){
+if(seccion==='planes'){
+if(direccion==='prev' && paginaPlanes>0) paginaPlanes--;
+if(direccion==='next' && (paginaPlanes+1)*registroMax<planesData.length) paginaPlanes++;
+renderPlanes();
+}
+if(seccion==='seguimiento'){
+if(direccion==='prev' && paginaSeguimiento>0) paginaSeguimiento--;
+if(direccion==='next' && (paginaSeguimiento+1)*registroMax<seguimientoData.length) paginaSeguimiento++;
+renderSeguimiento();
+}
+if(seccion==='salud'){
+if(direccion==='prev' && paginaSalud>0) paginaSalud--;
+if(direccion==='next' && (paginaSalud+1)*registroMax<saludData.length) paginaSalud++;
+renderSalud();
+}
+}
+
+async function eliminarPlan(id){
+await fetch(`${apiPlanes}/${id}`,{method:'DELETE'});
+await cargarPlanes(document.getElementById("selectMiembro").value);
+}
+
+async function editarPlan(id){
+let p=planesData.find(x=>x.id_plan===id);
+planObjetivo.value=p.objetivo||p.descripcion;
+planSemanas.value=p.semanas;
+planFrecuencia.value=p.frecuencia;
+planCategoria.value=p.categoria;
+editPlanId=id;
+document.getElementById("btnCrearPlan").textContent="Guardar Cambios";
+}
+
+async function registrarSeguimiento(){
+const id=document.getElementById("selectMiembro").value;
+if(!id) return;
+let idEntrenador=rolActual==='entrenador'?idUsuarioActual:null;
+const body={id_miembro:id,id_entrenador:idEntrenador,peso:Number(peso.value),grasa_corporal:Number(grasa.value),masa_muscular:Number(musculo.value),notas:notasPrivadas.value};
+let actualizarGrafica=false;
+if(editSeguimientoId){
+const registro=seguimientoData.find(x=>x.id_progreso===editSeguimientoId);
+if(registro.peso!==body.peso || registro.grasa_corporal!==body.grasa_corporal || registro.masa_muscular!==body.masa_muscular){
+actualizarGrafica=true;
+}
+await fetch(`${apiProgreso}/${editSeguimientoId}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+editSeguimientoId=null;
+document.getElementById("btnRegistrarSeguimiento").textContent="Registrar Seguimiento";
+}else{
+actualizarGrafica=true;
+await fetch(apiProgreso,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+}
+await cargarSeguimiento(id,actualizarGrafica);
+peso.value="";grasa.value="";musculo.value="";notasPrivadas.value="";
+}
+
+async function cargarSeguimiento(id,actualizarGrafica=true){
+const r=await fetch(apiListarProgreso+id);
+seguimientoDataOriginal=await r.json();
+seguimientoData=[...seguimientoDataOriginal];
+paginaSeguimiento=0;
+renderSeguimiento(actualizarGrafica);
+}
+
+function renderSeguimiento(actualizarGrafica=true){
+const c=document.getElementById("historialSeguimiento");
+c.innerHTML="";
+let start=paginaSeguimiento*registroMax;
+let end=start+registroMax;
+let labels=[],datosPeso=[],datosGrasa=[],datosMusculo=[];
+seguimientoData.slice(start,end).forEach(x=>{
+const e=document.createElement("div");
+e.className="border p-2 rounded d-flex justify-content-between align-items-center";
+e.innerHTML=`<span>${x.fecha} — Peso: ${x.peso}kg, Grasa: ${x.grasa_corporal}%, Músculo: ${x.masa_muscular}kg — Notas: ${x.notas||""}</span><div><button class="btn btn-sm btn-warning me-1" onclick="editarSeguimiento('${x.id_progreso}')">Editar</button><button class="btn btn-sm btn-danger" onclick="eliminarSeguimiento('${x.id_progreso}')">Eliminar</button></div>`;
+c.appendChild(e);
+labels.push(x.fecha);
+datosPeso.push(x.peso||0);
+datosGrasa.push(x.grasa_corporal||0);
+datosMusculo.push(x.masa_muscular||0);
+});
+if(actualizarGrafica) actualizarGraficoCombinado(labels,datosPeso,datosGrasa,datosMusculo);
+}
+
+function actualizarGraficoCombinado(labels,peso,grasa,musculo){
+const ctx=document.getElementById("graficoProgreso");
+if(graficoProgreso) graficoProgreso.destroy();
+graficoProgreso=new Chart(ctx,{
+type:"line",
+data:{
+labels:labels,
+datasets:[
+{label:"Peso (kg)", data:peso, borderColor:"blue", backgroundColor:"rgba(0,0,255,0.1)"},
+{label:"Grasa (%)", data:grasa, borderColor:"red", backgroundColor:"rgba(255,0,0,0.1)"},
+{label:"Músculo (kg)", data:musculo, borderColor:"green", backgroundColor:"rgba(0,255,0,0.1)"}
+]
+},
+options:{responsive:true,plugins:{legend:{display:true}},interaction:{mode:"index",intersect:false},scales:{y:{beginAtZero:true}}}
+});
+}
+
+async function editarSeguimiento(id){
+let p=seguimientoData.find(x=>x.id_progreso===id);
+peso.value=p.peso;
+grasa.value=p.grasa_corporal;
+musculo.value=p.masa_muscular;
+notasPrivadas.value=p.notas||"";
+editSeguimientoId=id;
+document.getElementById("btnRegistrarSeguimiento").textContent="Guardar Cambios";
+}
+
+async function eliminarSeguimiento(id){
+const registro=seguimientoData.find(x=>x.id_progreso===id);
+await fetch(`${apiProgreso}/${id}`,{method:'DELETE'});
+await cargarSeguimiento(document.getElementById("selectMiembro").value,true);
+}
+
+async function guardarRiesgos(){
+const id=document.getElementById("selectMiembro").value;
+if(!id) return;
+await fetch(apiRiesgos,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id_miembro:id,nota:riesgosSalud.value})});
+await cargarRiesgos(id);
+riesgosSalud.value="";
+}
+
+async function cargarRiesgos(id){
+const r=await fetch(apiRiesgosListar+id);
+saludDataOriginal=await r.json();
+saludData=[...saludDataOriginal];
+paginaSalud=0;
+renderSalud();
+}
+
+function renderSalud(){
+const c=document.getElementById("alertasRiesgo");
+c.innerHTML="";
+let start=paginaSalud*registroMax;
+let end=start+registroMax;
+saludData.slice(start,end).forEach(x=>{
+if(!x.id_estado) return;
+const e=document.createElement("div");
+e.className="alert alert-danger d-flex justify-content-between align-items-center";
+e.innerHTML=`<span>${x.nota}</span><button class="btn btn-sm btn-danger" onclick="eliminarRiesgo('${x.id_estado}')">Eliminar</button>`;
+c.appendChild(e);
+});
+}
+
+async function eliminarRiesgo(id){
+if(!id) return;
+await fetch(`${apiRiesgos}/${id}`,{method:'DELETE'});
+await cargarRiesgos(document.getElementById("selectMiembro").value);
+}
+
+async function crearFeedback(){
+const id=document.getElementById("selectMiembro").value;
+if(!id) return;
+let idEntrenador=rolActual==='entrenador'?idUsuarioActual:null;
+await fetch(apiFeedback,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id_miembro:id,id_entrenador:idEntrenador,mensaje:feedbackMensaje.value})});
+feedbackMensaje.value="";
+await cargarFeedback(id);
+}
+
+async function cargarFeedback(id){
+const r=await fetch(apiFeedback+"/"+id);
+const d=await r.json();
+const c=document.getElementById("listaFeedback");
+c.innerHTML="";
+d.forEach(x=>{
+const e=document.createElement("div");
+e.className="border p-2 rounded";
+e.textContent=x.fecha_creacion+" — "+(x.mensaje||"")+(x.respuesta_entrenador?" — Respuesta: "+x.respuesta_entrenador:"");
+e.onclick=()=>mostrarModalFeedback(x);
+c.appendChild(e);
+});
+}
+
+function mostrarModalFeedback(feedback){
+editFeedbackId=feedback.id_feedback;
+document.getElementById("modalMensaje").textContent=feedback.mensaje||"";
+document.getElementById("modalRespuesta").textContent=feedback.respuesta_entrenador?`Respuesta: ${feedback.respuesta_entrenador}`:"";
+document.getElementById("modalView").classList.remove("d-none");
+document.getElementById("modalEdit").classList.add("d-none");
+new bootstrap.Modal(document.getElementById("modalFeedback")).show();
+
+document.getElementById("btnEditarFeedback").onclick=()=>{
+document.getElementById("modalView").classList.add("d-none");
+document.getElementById("modalEdit").classList.remove("d-none");
+document.getElementById("inputEditarMensaje").value=feedback.mensaje||"";
+};
+
+document.getElementById("btnGuardarEdicion").onclick=async ()=>{
+const nuevoMensaje=document.getElementById("inputEditarMensaje").value;
+if(nuevoMensaje){
+await fetch(`${apiFeedback}/${feedback.id_feedback}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({mensaje:nuevoMensaje})});
+await cargarFeedback(document.getElementById("selectMiembro").value);
+document.getElementById("modalView").classList.remove("d-none");
+document.getElementById("modalEdit").classList.add("d-none");
+}
+};
+
+document.getElementById("btnEliminarFeedback").onclick=async ()=>{
+await fetch(`${apiFeedback}/${feedback.id_feedback}`,{method:"DELETE"});
+await cargarFeedback(document.getElementById("selectMiembro").value);
+};
+
+}
+
+function filtrarPlanes(filtro){
+planesData=[...planesDataOriginal];
+const hoy=new Date();
+let fd;
+switch(filtro){
+case"recientes": fd=new Date(hoy.getTime()-7*24*60*60*1000); break;
+case"estaSemana": fd=new Date(hoy.setDate(hoy.getDate()-hoy.getDay())); break;
+case"mes": fd=new Date(hoy.getFullYear(),hoy.getMonth(),1); break;
+case"ultimos6Meses": fd=new Date(hoy.setMonth(hoy.getMonth()-6)); break;
+}
+planesData=planesData.filter(p=>new Date(p.fecha_creacion)>=fd);
+paginaPlanes=0;
+renderPlanes();
+}
+
+function filtrarSeguimiento(filtro){
+seguimientoData=[...seguimientoDataOriginal];
+const hoy=new Date();
+let fd;
+switch(filtro){
+case"recientes": fd=new Date(hoy.getTime()-7*24*60*60*1000); break;
+case"estaSemana": fd=new Date(hoy.setDate(hoy.getDate()-hoy.getDay())); break;
+case"mes": fd=new Date(hoy.getFullYear(),hoy.getMonth(),1); break;
+case"ultimos6Meses": fd=new Date(hoy.setMonth(hoy.getMonth()-6)); break;
+}
+seguimientoData=seguimientoData.filter(s=>new Date(s.fecha)>=fd);
+paginaSeguimiento=0;
+renderSeguimiento();
+}
+
+function filtrarSalud(filtro){
+saludData=[...saludDataOriginal];
+const hoy=new Date();
+let fd;
+switch(filtro){
+case"recientes": fd=new Date(hoy.getTime()-7*24*60*60*1000); break;
+case"estaSemana": fd=new Date(hoy.setDate(hoy.getDate()-hoy.getDay())); break;
+case"mes": fd=new Date(hoy.getFullYear(),hoy.getMonth(),1); break;
+case"ultimos6Meses": fd=new Date(hoy.setMonth(hoy.getMonth()-6)); break;
+}
+saludData=saludData.filter(s=>s.fecha && new Date(s.fecha)>=fd);
+paginaSalud=0;
+renderSalud();
+}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

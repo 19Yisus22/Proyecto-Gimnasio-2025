@@ -1,40 +1,291 @@
-AJUSTE ESTE HTML COMPLETO PARA LOS REPORTES DENTRO DE LA PAGINA 
+ANALIZE LAS TABLAS COMPLETAS Y MUESTRE CUAL SIRVE PARA ESTE MODULO PARA SUBIR LOS DATOS JSON A LA BASE DE DATOS SIN PROBLEMAS
+-- ============================================
+-- ROLES Y PERMISOS
+-- ============================================
+CREATE TABLE roles (
+    id_rol UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre_rol TEXT UNIQUE NOT NULL CHECK (nombre_rol IN ('miembro','entrenador','recepcionista','nutricionista','administrador','visitante')),
+    descripcion TEXT
+);
+
+CREATE TABLE permisos (
+    id_permiso UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre_permiso TEXT UNIQUE NOT NULL,
+    descripcion TEXT
+);
+
+CREATE TABLE roles_permisos (
+    id_rol UUID REFERENCES roles(id_rol) ON DELETE CASCADE,
+    id_permiso UUID REFERENCES permisos(id_permiso) ON DELETE CASCADE,
+    PRIMARY KEY (id_rol, id_permiso)
+);
+
+-- ============================================
+-- M_ USUARIOS
+-- ============================================
+CREATE TABLE usuarios (
+    id_usuario UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_rol UUID REFERENCES roles(id_rol),
+    imagen_url TEXT,
+    nombre TEXT NOT NULL,
+    apellido TEXT NOT NULL,
+    genero TEXT,
+    telefono TEXT,
+    direccion TEXT,
+    cedula TEXT UNIQUE NOT NULL,
+    fecha_nacimiento DATE,
+    correo TEXT UNIQUE NOT NULL,
+    metodo_pago TEXT CHECK (metodo_pago IN ('Efectivo','Transferencia','Tarjeta')) DEFAULT 'Efectivo',
+    contrasena TEXT NOT NULL,
+    membresia_activa BOOLEAN DEFAULT FALSE,
+    fecha_inicio_membresia DATE,
+    fecha_fin_membresia DATE,
+    fecha_creacion DATE DEFAULT CURRENT_DATE
+);
+
+-- ============================================
+-- M_ CLASES Y RESERVAS
+-- ============================================
+CREATE TABLE m_clases (
+    id_clase UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre TEXT NOT NULL,
+    descripcion TEXT,
+    tipo_clase TEXT CHECK (tipo_clase IN ('yoga','crossfit','spinning')),
+    nivel_dificultad TEXT CHECK (nivel_dificultad IN ('principiante','intermedio','avanzado')),
+    instructor_id UUID REFERENCES usuarios(id_usuario) ON DELETE SET NULL ON UPDATE CASCADE,
+    capacidad_max INT NOT NULL,
+    horario_inicio TIME NOT NULL,
+    horario_fin TIME NOT NULL,
+    sala TEXT,
+    estado BOOLEAN DEFAULT TRUE,
+    fecha_creacion DATE DEFAULT CURRENT_DATE
+);
+
+CREATE TABLE m_reservas (
+    id_reserva UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_miembro UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    id_clase UUID REFERENCES m_clases(id_clase) ON DELETE CASCADE ON UPDATE CASCADE,
+    fecha_reserva DATE DEFAULT CURRENT_DATE,
+    estado TEXT DEFAULT 'reservada' CHECK (estado IN ('reservada','cancelada','completada')),
+    asistencia_confirmada BOOLEAN DEFAULT FALSE,
+    notas TEXT
+);
+
+-- ============================================
+-- M_ ENTRENAMIENTOS PERSONALES
+-- ============================================
+CREATE TABLE m_entrenamientos_personales (
+    id_entrenamiento UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_miembro UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    id_entrenador UUID REFERENCES usuarios(id_usuario) ON DELETE SET NULL ON UPDATE CASCADE,
+    fecha DATE NOT NULL,
+    hora TIME NOT NULL,
+    duracion INT,
+    notas TEXT,
+    estado TEXT DEFAULT 'programado' CHECK (estado IN ('programado','completado','cancelado')),
+    fecha_creacion DATE DEFAULT CURRENT_DATE
+);
+
+-- ============================================
+-- N_ PLANES NUTRICIONALES
+-- ============================================
+CREATE TABLE n_planes_nutricion (
+    id_plan UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_miembro UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    id_nutricionista UUID REFERENCES usuarios(id_usuario) ON DELETE SET NULL ON UPDATE CASCADE,
+    descripcion TEXT,
+    calorias INT,
+    fecha_inicio DATE,
+    fecha_fin DATE,
+    estado BOOLEAN DEFAULT TRUE,
+    fecha_creacion DATE DEFAULT CURRENT_DATE
+);
+
+CREATE TABLE n_sesiones_evaluacion (
+    id_sesion UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_plan UUID REFERENCES n_planes_nutricion(id_plan) ON DELETE CASCADE ON UPDATE CASCADE,
+    fecha DATE NOT NULL,
+    hora TIME NOT NULL,
+    notas TEXT,
+    estado TEXT DEFAULT 'programada' CHECK (estado IN ('programada','realizada','cancelada'))
+);
+
+CREATE TABLE n_progreso_miembro (
+    id_progreso UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_miembro UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    fecha DATE DEFAULT CURRENT_DATE,
+    peso DECIMAL(5,2),
+    grasa_corporal DECIMAL(5,2),
+    masa_muscular DECIMAL(5,2),
+    seguimiento_dieta TEXT,
+    observaciones TEXT
+);
+
+CREATE TABLE n_feedback_plan (
+    id_feedback UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_plan UUID REFERENCES n_planes_nutricion(id_plan) ON DELETE CASCADE ON UPDATE CASCADE,
+    fecha DATE DEFAULT CURRENT_DATE,
+    calificacion TEXT CHECK (calificacion IN ('Excelente','Bueno','Regular','Insuficiente')),
+    comentarios TEXT
+);
+
+-- ============================================
+-- M_ PROGRESO Y ESTADO FÍSICO
+-- ============================================
+CREATE TABLE m_progreso (
+    id_progreso UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_miembro UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    fecha DATE DEFAULT CURRENT_DATE,
+    peso DECIMAL(5,2),
+    grasa_corporal DECIMAL(5,2),
+    masa_muscular DECIMAL(5,2),
+    calorias_quemadas DECIMAL(8,2),
+    fuerza DECIMAL(5,2),
+    resistencia DECIMAL(5,2),
+    notas TEXT,
+    objetivo_personal TEXT
+);
+
+CREATE TABLE m_estado_salud (
+    id_estado UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_miembro UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    fecha DATE DEFAULT CURRENT_DATE,
+    hora TIME DEFAULT CURRENT_TIME,
+    nota TEXT NOT NULL
+);
+
+-- ============================================
+-- M_ MEMBRESÍAS
+-- ============================================
+CREATE TABLE m_membresias (
+    id_membresia UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_miembro UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    tipo_membresia TEXT CHECK (tipo_membresia IN ('mensual','trimestral','anual')),
+    fecha_inicio DATE,
+    fecha_fin DATE,
+    precio NUMERIC(12,2),
+    estado TEXT DEFAULT 'activa' CHECK (estado IN ('activa','vencida','cancelada')),
+    metodo_pago TEXT CHECK (metodo_pago IN ('Efectivo','Transferencia','Tarjeta'))
+);
+
+-- ============================================
+-- M_/E_ FEEDBACK
+-- ============================================
+CREATE TABLE m_feedback_clases (
+    id_comentario UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_usuario UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    id_clase UUID REFERENCES m_clases(id_clase) ON DELETE CASCADE ON UPDATE CASCADE,
+    mensaje TEXT NOT NULL,
+    calificacion INT CHECK (calificacion BETWEEN 1 AND 5),
+    fecha_creacion DATE DEFAULT CURRENT_DATE,
+    respuesta_entrenador TEXT
+);
+
+CREATE TABLE m_feedback_entrenadores (
+    id_feedback UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_entrenador UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    id_miembro UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    mensaje TEXT NOT NULL,
+    calificacion INT CHECK (calificacion BETWEEN 1 AND 5),
+    fecha_creacion DATE DEFAULT CURRENT_DATE,
+    respuesta_entrenador TEXT
+);
+
+-- ============================================
+-- E_ ENTRENADOR: NOTIFICACIONES A MIEMBROS
+-- ============================================
+CREATE TABLE m_notificaciones_miembros (
+    id_notificacion_miembro UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_miembro UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    titulo TEXT,
+    descripcion TEXT,
+    tipo_notificacion TEXT CHECK (tipo_notificacion IN ('clase','promocion','recordatorio')),
+    imagen_url TEXT,
+    leida BOOLEAN DEFAULT FALSE,
+    fecha DATE DEFAULT CURRENT_DATE,
+    hora TIME DEFAULT CURRENT_TIME
+);
+
+-- ============================================
+-- A_ ADMINISTRADOR: REPORTES
+-- ============================================
+CREATE TABLE a_reportes_asistencia (
+    id_reporte UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_clase UUID REFERENCES m_clases(id_clase) ON DELETE CASCADE ON UPDATE CASCADE,
+    fecha DATE DEFAULT CURRENT_DATE,
+    asistentes INT,
+    canceladas INT,
+    completadas INT,
+    observaciones TEXT
+);
+
+CREATE TABLE a_membresias_activas (
+    id_membresia UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_miembro UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    fecha_inicio DATE,
+    fecha_fin DATE,
+    estado TEXT CHECK (estado IN ('activa','vencida','cancelada'))
+);
+
+-- ============================================
+-- A_ ADMINISTRADOR: NOTIFICACIONES
+-- ============================================
+CREATE TABLE a_notificaciones (
+    id_notificacion UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    titulo TEXT,
+    descripcion TEXT,
+    imagen_url TEXT,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+create table a_marketing_sistema (
+  id_marketing serial primary key,
+  info_inicio text,
+  carrusel jsonb,
+  secciones jsonb
+);
+
+-- ============================================
+-- E_ ENTRENADOR: CLASES Y FEEDBACK
+-- ============================================
+CREATE TABLE e_clases (
+    id_clase UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_entrenador UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    nombre TEXT NOT NULL,
+    descripcion TEXT,
+    tipo_clase TEXT CHECK (tipo_clase IN ('yoga','crossfit','spinning')),
+    nivel_dificultad TEXT CHECK (nivel_dificultad IN ('principiante','intermedio','avanzado')),
+    capacidad_max INT NOT NULL,
+    horario_inicio TIME NOT NULL,
+    horario_fin TIME NOT NULL,
+    sala TEXT,
+    estado BOOLEAN DEFAULT TRUE,
+    fecha_creacion DATE DEFAULT CURRENT_DATE
+);
+
+CREATE TABLE e_feedback_clases (
+    id_comentario UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_entrenador UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    id_clase UUID REFERENCES e_clases(id_clase) ON DELETE CASCADE ON UPDATE CASCADE,
+    mensaje TEXT NOT NULL,
+    calificacion INT CHECK (calificacion BETWEEN 1 AND 5),
+    fecha_creacion DATE DEFAULT CURRENT_DATE,
+    respuesta_entrenador TEXT
+);
+
+CREATE TABLE e_feedback_miembros (
+    id_feedback UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_entrenador UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    id_miembro UUID REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    mensaje TEXT NOT NULL,
+    calificacion INT CHECK (calificacion BETWEEN 1 AND 5),
+    observacion_entrenador TEXT,
+    fecha_creacion DATE DEFAULT CURRENT_DATE
+);
 
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reportes y Análisis | Administración</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-{% include 'navbar.html' %}
+SIENDO ESTE PARTE DEL BACKEND:
 
-<div class="container mt-4">
-  <h2>Reportes y Análisis</h2>
-  <div class="mb-3">
-    <button class="btn btn-primary" onclick="generarReporte('asistencia')">Reporte Asistencia</button>
-    <button class="btn btn-primary" onclick="generarReporte('ingresos')">Reporte Ingresos</button>
-    <button class="btn btn-primary" onclick="generarReporte('retencion')">Reporte Retención</button>
-  </div>
-
-  <canvas id="chartReporte" height="150"></canvas>
-</div>
-
-<script src="{{ url_for('static', filename='js/reportes_analisis.js') }}"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-
-
-
-COMPLETO SIN COMENTARIOS
-
-
-SIENDO ESTE PARTE DEL BACKEND
 from flask_cors import CORS
 from datetime import datetime
 from dotenv import load_dotenv
@@ -84,9 +335,177 @@ def admin_modulos_render(modulo):
 
 AJUSTE LOS ENDPOINTS Y LAS FUNCIONES JAVA COMPLETO PARA QUE SE CAPTRUEN LOS DATOS POR JSON Y SE SUBAN SIN PROBLEMA LOS DATOS A LA TABLA USUARIO, PARA MOSTRAR O FILTRAR LA INFORMACION TAMBIÉN, SIN COMENTARIOS
 
+HTML AJUSTE:
+
+ANALIZE EL TEXTO BASE COMPLETO:
+
+Sistema de Gestión para un Gimnasio y Centro de Fitness
+Un gimnasio y centro de fitness de tamaño medio con 1,000 miembros activos, ofreciendo clases grupales (yoga, crossfit, spinning), entrenamiento personalizado, servicios de nutrición y un spa con masajes y saunas, ubicado en un barrio residencial con alta población joven, enfrenta desafíos operativos con un sistema manual de inscripciones en papel y una app básica sin integración, lo que causa errores en inscripciones a clases (10% duplicadas por falta de verificación en tiempo real), demoras en programación de sesiones personalizadas (15 minutos por cita en recepción), falta de seguimiento de progreso individual (e.g., métricas de peso o rendimiento) y bajas tasas de retención por ausencia de recordatorios, resultando en un 20% de insatisfacción en encuestas anuales y churn de miembros del 25%.
+El equipo incluye 20 empleados: 8 entrenadores certificados en diversas disciplinas, 5 recepcionistas para manejo de check-ins, 4 nutricionistas para planes dietéticos, y 3 administradores para finanzas y marketing, quienes gestionan inscripciones con pagos recurrentes, programación de clases con límites de capacidad, seguimiento de progresos con logs de sesiones, y reportes de asistencia para optimización de horarios. Los miembros demandan una app web y móvil para reservar clases con vista de calendario en tiempo real, rastrear progreso personal con gráficos interactivos (e.g., calorías quemadas), recibir planes nutricionales personalizados y notificaciones oprimidas sobre clases o promociones. La gerencia necesita monitoreo de membresías activas, análisis de asistencia por clase para cancelaciones automáticas de bajas, y integración con wearables como Fitbit para sincronización de datos.
+Objetivos: aumentar membresías en un 20% con campañas digitales, reducir errores administrativos en un 85%, y elevar satisfacción al 90% con feedback loops. Escalable para 20% crecimiento en miembros, soporta 800 usuarios en picos matutinos, cumplimiento RGPD, WCAG 2.1, multilingüe (español, inglés). Costos: $30,000 anuales.
+Entorno: opera de 6:00-22:00 diariamente, picos en mañanas (6:00-9:00) y tardes (17:00-20:00). Sistema para gestión de turnos, alertas de vencimientos de membresías y módulo de retroalimentación para calificaciones de clases y entrenadores, permitiendo ajustes basados en datos.
+
+EN BASE AL TEXTO ANTERIOR AJUSTE, CREE Y MODIFIQUE LOS WIDGETS COMPLETOS QUE NECESITA EL MODULO COMPLETO DE MIS CLASES DEL ROL ENTRENADOR EXCLUSIVAMENTE.
+
+AJUSTELO EN ESTA SINTAXIS DE HTML
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Publicidad | Administración</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/styles_admin/style_gestion_publicidad.css') }}">
+</head>
+<body>
+
+{% include 'navbar.html' %}
+
+<div class="container mt-4">
+  <h2>Marketing</h2>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5>Idioma del Sistema</h5>
+      <div class="row g-2">
+        <div class="col-md-3">
+          <select id="idiomaSistema" class="form-control">
+            <option value="es">Español</option>
+            <option value="en">Inglés</option>
+          </select>
+        </div>
+        <div class="col-md-12 mt-2">
+          <button class="btn btn-success w-100" onclick="guardarIdioma()">Guardar Configuración</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5>|Sistema de Notificaciones</h5>
+      <p>Muestra notificaciones personalizadas en la página de inicio:</p>
+      <div class="row g-2">
+
+        <div class="col-md-3">
+          <div id="previewNotificacion" class="preview-img-box" style="display:none">
+            <img id="previewNotificacionImg">
+          </div>
+          <input type="file" id="archivoNotificacion" class="form-control">
+        </div>
+
+        <div class="col-md-3"><input type="text" id="tituloNotificacion" class="form-control" placeholder="Título"></div>
+        <div class="col-md-3"><input type="text" id="descNotificacion" class="form-control" placeholder="Descripción"></div>
+
+        <div class="col-md-3 mt-1">
+          <button class="btn btn-info w-100" onclick="crearNotificacion()">Crear Notificación</button>
+        </div>
+
+        <div class="col-md-12 mt-3">
+          <h6>Alertas existentes</h6>
+          <div id="contenedorAlertas" class="d-flex flex-column gap-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+
+      <h5>|Sistema de Publicidad</h5>
+
+      <div class="row g-2">
+
+        <div class="col-12 mb-2"><strong>Carrusel</strong></div>
+        <div id="carruselContainer" class="col-12"></div>
+        <div class="col-12 mb-2">
+          <button class="btn btn-primary w-100" onclick="agregarCarrusel()">Agregar nueva sección carrusel</button>
+        </div>
+
+        <div class="col-12 mt-3 mb-2"><strong>Secciones</strong></div>
+        <div id="seccionesContainer" class="col-12"></div>
+        <div class="col-12 mb-2">
+          <button class="btn btn-primary w-100" onclick="agregarSeccion()">Agregar nueva sección</button>
+        </div>
+
+        <div class="col-12 mt-3 mb-2"><strong>Subtitulo de Inicio</strong></div>
+        <div class="col-md-12 mt-3">
+          <textarea id="infoInicio" class="form-control mb-2" rows="3" placeholder="Información que se muestra en inicio"></textarea>
+          <button class="btn btn-dark w-100" onclick="guardarMarketing(true)">Compartir publicidad en el inicio</button>
+        </div>
+
+        <div class="col-md-12 mt-4">
+          <h5>|Previsualización del la publicidad</h5>
+          <p>Muestra una vista previa de las imagenes, títulos y descripción de la publicidad montada:</p>
+
+          <div id="previewInicio" class="p-2 border rounded">
+
+            <div id="previewCarrusel" class="carousel slide mb-2" data-bs-ride="carousel">
+              <div class="carousel-inner"></div>
+              <button class="carousel-control-prev" type="button" data-bs-target="#previewCarrusel" data-bs-slide="prev">
+                <span class="carousel-control-prev-icon"></span>
+                <span class="visually-hidden">Anterior</span>
+              </button>
+              <button class="carousel-control-next" type="button" data-bs-target="#previewCarrusel" data-bs-slide="next">
+                <span class="carousel-control-next-icon"></span>
+                <span class="visually-hidden">Siguiente</span>
+              </button>
+            </div>
+
+            <div id="previewSecciones" class="d-flex flex-wrap mb-2"></div>
+
+            <div id="previewInfo" class="bg-light p-2 rounded"></div>
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer" class="position-fixed p-3 top-0 end-0"></div>
+
+<div class="modal fade" id="modalEditarNotificacion">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar Notificación</h5>
+        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="text-center mb-3">
+          <img id="modalImgActual" style="max-height:150px;border-radius:8px">
+        </div>
+
+        <input type="file" id="modalArchivoNuevo" class="form-control mb-2">
+        <input type="text" id="modalTitulo" class="form-control mb-2" placeholder="Título">
+        <input type="text" id="modalDescripcion" class="form-control mb-2" placeholder="Descripción">
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-success" onclick="guardarEdicionNotificacion()">Guardar Cambios</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{% include 'footer.html' %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/funtions_admin/gestion_publicidad.js') }}"></script>
+
+</body>
+</html>
+
+ADAPTELO POR COMPLETO SIN COMENTARIOS
 
 
 
 
-
+AJUSTE LAS FUNCIONES PARA QUE AL EDITAR SE DESACTIVE EL CAMPO DE CONTRASEÑA YA QUE ESE NO SE PUEDE ACTUALZIAR SOLO AL CREAR UN NUEVO USAURIO 
 
