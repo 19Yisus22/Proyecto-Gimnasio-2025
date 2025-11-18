@@ -169,454 +169,6 @@ def logout():
     session.clear()
     return jsonify({"ok": True, "redirect": url_for("index")})
 
-# MODULOS ENTRENADOR
-
-@app.route("/index_entrenador")
-def index_entrenador():
-    return render_template("inicio.html", user=session.get("user"))
-
-@app.route("/entrenador_modulos_render/<modulo>")
-def entrenador_modulos_render(modulo):
-    return render_template(f"trainer_modules/{modulo}.html", user=session.get("user"))
-
-# MODULO GESTION USUARIOS
-
-# FUNCIONES SECCION CALENDARIO / MODULO MIS CLASES - ENTRENADOR
-
-@app.route("/api/entrenador/calendario/crear", methods=["POST"])
-def entrenador_crea_recordatorio_calendario():
-    data = request.get_json()
-    payload = {
-        "id_miembro": data["id_miembro"],
-        "titulo": data["titulo"],
-        "descripcion": data.get("descripcion"),
-        "tipo_recordatorio": data.get("tipo_recordatorio"),
-        "imagen_url": data.get("imagen_url"),
-        "fecha": data.get("fecha"),
-        "hora": data.get("hora")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("e_registro_calendario").insert(payload).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/entrenador/calendario/miembro/<id_miembro>", methods=["GET"])
-def entrenador_listar_calendario_miembro(id_miembro):
-    resp = (
-        supabase.table("e_registro_calendario")
-        .select("*")
-        .eq("id_miembro", id_miembro)
-        .order("fecha", desc=True)
-        .execute()
-    )
-    return jsonify(resp.data), 200
-
-@app.route("/api/entrenador/calendario/<id_recordatorio>", methods=["PUT"])
-def entrenador_actualiza_recordatorio_calendario(id_recordatorio):
-    data = request.get_json()
-    payload = {
-        "titulo": data.get("titulo"),
-        "descripcion": data.get("descripcion"),
-        "tipo_recordatorio": data.get("tipo_recordatorio"),
-        "imagen_url": data.get("imagen_url"),
-        "leida": data.get("leida"),
-        "fecha": data.get("fecha"),
-        "hora": data.get("hora")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = (
-        supabase.table("e_registro_calendario")
-        .update(payload)
-        .eq("id_recordatorio", id_recordatorio)
-        .execute()
-    )
-    return jsonify(resp.data), 200
-
-@app.route("/api/entrenador/calendario/<id_recordatorio>", methods=["DELETE"])
-def entrenador_elimina_recordatorio_calendario(id_recordatorio):
-    resp = (
-        supabase.table("e_registro_calendario")
-        .delete()
-        .eq("id_recordatorio", id_recordatorio)
-        .execute()
-    )
-    return jsonify(resp.data), 200
-
-# MODULO RESERVAS
-
-# FUNCIONES SECCCION RESERVAS / MODULO MIS CLASES - ENTRENADOR (ARREGLAR TODO)
-
-@app.route("/api/miembros", methods=["GET"])
-def listar_miembros():
-    roles = supabase.table("roles").select("id_rol").eq("nombre_rol", "miembro").execute()
-    id_rol_miembro = roles.data[0]["id_rol"]
-    resp = supabase.table("usuarios").select("*").eq("id_rol", id_rol_miembro).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/reservas", methods=["POST"])
-def crear_reserva():
-    data = request.get_json()
-    resp = supabase.table("m_reservas").insert({
-        "id_miembro": data["id_miembro"],
-        "id_clase": data["id_clase"],
-        "fecha_reserva": data.get("fecha_reserva"),
-        "estado": "reservada",
-        "notas": data.get("notas")
-    }).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/reservas", methods=["GET"])
-def listar_reservas():
-    resp = supabase.table("m_reservas").select("*").execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/reservas/miembro/<id_miembro>", methods=["GET"])
-def reservas_por_miembro(id_miembro):
-    resp = supabase.table("m_reservas").select("*").eq("id_miembro", id_miembro).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/reservas/<id_reserva>", methods=["PUT"])
-def actualizar_reserva(id_reserva):
-    data = request.get_json()
-    resp = supabase.table("m_reservas").update(data).eq("id_reserva", id_reserva).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/reservas/<id_reserva>", methods=["DELETE"])
-def eliminar_reserva(id_reserva):
-    resp = supabase.table("m_reservas").delete().eq("id_reserva", id_reserva).execute()
-    return jsonify(resp.data), 200
-
-
-# MODULO NOTIFICACIONES
-
-# FUNCIONES SECCION NOTIFICACIONES / MODULO MIS CLASES - ENTRENADOR
-
-@app.route("/api/notificaciones/<id_notificacion>", methods=["PUT"])
-def actualizar_notificacion(id_notificacion):
-    data = request.get_json()
-    payload = {
-        "titulo": data.get("titulo"),
-        "descripcion": data.get("descripcion"),
-        "tipo_notificacion": data.get("tipo_notificacion"),
-        "imagen_url": data.get("imagen_url"),
-        "leida": data.get("leida")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = (
-        supabase.table("m_notificaciones_miembros")
-        .update(payload)
-        .eq("id_notificacion_miembro", id_notificacion)
-        .execute()
-    )
-    return jsonify(resp.data), 200
-
-@app.route("/api/notificaciones/<id_notificacion>", methods=["DELETE"])
-def eliminar_notificacion(id_notificacion):
-    resp = (
-        supabase.table("m_notificaciones_miembros")
-        .delete()
-        .eq("id_notificacion_miembro", id_notificacion)
-        .execute()
-    )
-    return jsonify(resp.data), 200
-
-@app.route("/api/progreso", methods=["POST"])
-def crear_progreso():
-    data = request.get_json()
-    payload = {
-        "id_miembro": data.get("id_miembro"),
-        "fecha": data.get("fecha") or datetime.now().date().isoformat(),
-        "peso": data.get("peso"),
-        "grasa_corporal": data.get("grasa_corporal"),
-        "masa_muscular": data.get("masa_muscular"),
-        "calorias_quemadas": data.get("calorias_quemadas"),
-        "fuerza": data.get("fuerza"),
-        "resistencia": data.get("resistencia"),
-        "notas": data.get("notas"),
-        "objetivo_personal": data.get("objetivo_personal")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("m_progreso").insert(payload).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/progreso/<id_miembro>", methods=["GET"])
-def obtener_progreso(id_miembro):
-    resp = (
-        supabase.table("m_progreso")
-        .select("*")
-        .eq("id_miembro", id_miembro)
-        .order("fecha", desc=False)
-        .execute()
-    )
-    return jsonify(resp.data), 200
-
-@app.route("/api/progreso/<id_progreso>", methods=["PUT"])
-def actualizar_progreso(id_progreso):
-    data = request.get_json()
-    payload = {
-        "fecha": data.get("fecha"),
-        "peso": data.get("peso"),
-        "grasa_corporal": data.get("grasa_corporal"),
-        "masa_muscular": data.get("masa_muscular"),
-        "calorias_quemadas": data.get("calorias_quemadas"),
-        "fuerza": data.get("fuerza"),
-        "resistencia": data.get("resistencia"),
-        "notas": data.get("notas"),
-        "objetivo_personal": data.get("objetivo_personal")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("m_progreso").update(payload).eq("id_progreso", id_progreso).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/progreso/<id_progreso>", methods=["DELETE"])
-def eliminar_progreso(id_progreso):
-    resp = (
-        supabase.table("m_progreso")
-        .delete()
-        .eq("id_progreso", id_progreso)
-        .execute()
-    )
-    return jsonify(resp.data), 200
-
-
-# MODULO PROGRESO
-
-# FUNCIONES SECCION PROGRESO / MODULO MIS CLASES CLASES - ENTRENADOR
-
-@app.route("/miembros_progreso")
-def miembros_progreso():
-    miembros_data = supabase.table("usuarios").select(
-        "id_usuario,nombre,apellido,roles(nombre_rol),progreso(id_progreso,peso,grasa_corporal,masa_muscular,calorias_quemadas,fuerza,resistencia,fecha,objetivo_personal),entrenamientos_personales!entrenamientos_personales_id_miembro_fkey(id_entrenador)"
-    ).eq("roles.nombre_rol", "miembro").execute()
-
-    miembros = []
-    for m in miembros_data.data:
-        historial = m.get("progreso", [])
-        ultimo = max(historial, key=lambda x: x["fecha"], default={})
-        entrenador_nombre = ""
-        if m.get("entrenamientos_personales"):
-            entrenador_id = m["entrenamientos_personales"][0].get("id_entrenador")
-            if entrenador_id:
-                entrenador_data = supabase.table("usuarios").select("nombre,apellido").eq("id_usuario", entrenador_id).execute()
-                if entrenador_data.data:
-                    entrenador_nombre = f'{entrenador_data.data[0]["nombre"]} {entrenador_data.data[0]["apellido"]}'
-        miembros.append({
-            "id": m["id_usuario"],
-            "nombre": f'{m["nombre"]} {m["apellido"]}',
-            "entrenador": entrenador_nombre,
-            "peso": ultimo.get("peso", 0),
-            "grasa_corporal": ultimo.get("grasa_corporal", 0),
-            "masa_muscular": ultimo.get("masa_muscular", 0),
-            "fuerza": ultimo.get("fuerza", 0),
-            "resistencia": ultimo.get("resistencia", 0),
-            "calorias": ultimo.get("calorias_quemadas", 0),
-            "ultima_sesion": ultimo.get("fecha", ""),
-            "objetivo_personal": ultimo.get("objetivo_personal", "")
-        })
-    return jsonify({"ok": True, "miembros": miembros})
-
-@app.route("/entrenadores")
-def entrenadores():
-    rol_entrenador = supabase.table("roles").select("id_rol").eq("nombre_rol", "Entrenador").execute()
-    if not rol_entrenador.data:
-        return jsonify({"ok": False, "entrenadores": []})
-    id_rol_entrenador = rol_entrenador.data[0]["id_rol"]
-
-    entrenadores_data = supabase.table("usuarios").select("id_usuario,nombre,apellido").eq("id_rol", id_rol_entrenador).execute()
-    entrenadores = [
-        {"id": e["id_usuario"], "nombre": f'{e["nombre"]} {e["apellido"]}'}
-        for e in entrenadores_data.data
-    ]
-    return jsonify({"ok": True, "entrenadores": entrenadores})
-
-@app.route("/miembro_detalle/<id>")
-def miembro_detalle(id):
-    historial_data = supabase.table("progreso").select(
-        "fecha,peso,grasa_corporal,masa_muscular,fuerza,resistencia,calorias_quemadas,objetivo_personal"
-    ).eq("id_miembro", id).order("fecha", ascending=True).execute()
-    historial = historial_data.data
-    if historial:
-        for h in historial:
-            h["calorias"] = h.pop("calorias_quemadas", 0)
-        return jsonify({"ok": True, "historial": historial})
-    return jsonify({"ok": False})
-
-
-# MODULO ENTRENAMIENTOS PERSONALIZADOS
-
-# FUNCIONES SECCION CARGAR MIEMBROS MODULO / ENTRENAMIENTOS PERSONALIZADOS - ENTRENADOR
-
-@app.route("/api/miembro/<id_miembro>", methods=["GET"])
-def obtener_miembro(id_miembro):
-    resp = (
-        supabase.table("usuarios")
-        .select("*")
-        .eq("id_usuario", id_miembro)
-        .single()
-        .execute()
-    )
-    return jsonify(resp.data), 200
-
-# FUNCIONES SECCION ESTADO DE SALUD MODULO / ENTRENAMIENTOS PERSONALIZADOS - ENTRENADOR
-
-@app.route("/api/estado_salud/<id_miembro>", methods=["GET"])
-def obtener_estado_salud(id_miembro):
-    resp = supabase.table("m_estado_salud").select("*").eq("id_miembro", id_miembro).order("fecha", desc=False).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/estado_salud", methods=["POST"])
-def crear_estado_salud():
-    data = request.get_json()
-    payload = {
-        "id_estado": str(uuid.uuid4()),
-        "id_miembro": data.get("id_miembro"),
-        "fecha": data.get("fecha"),
-        "hora": data.get("hora"),
-        "nota": data.get("nota")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("m_estado_salud").insert(payload).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/estado_salud/<id_estado>", methods=["PUT"])
-def actualizar_estado_salud(id_estado):
-    data = request.get_json()
-    payload = {
-        "nota": data.get("nota"),
-        "fecha": data.get("fecha"),
-        "hora": data.get("hora")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("m_estado_salud").update(payload).eq("id_estado", id_estado).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/estado_salud/<id_estado>", methods=["DELETE"])
-def eliminar_estado_salud(id_estado):
-    resp = supabase.table("m_estado_salud").delete().eq("id_estado", id_estado).execute()
-    return jsonify(resp.data), 200
-
-# FUNCIONES SECCION PLAN ENTRENAMIENTO PERSONALIZADO / MODULO ENTRENAMIENTOS PERSONALIZADOS - ENTRENADOR
-
-@app.route("/api/planes/<id_miembro>", methods=["GET"])
-def obtener_planes(id_miembro):
-    filtro = request.args.get("filtro")
-    query = supabase.table("m_entrenamientos_personales").select("*").eq("id_miembro", id_miembro)
-
-    if filtro == "semana":
-        query = query.gte("fecha_creacion", (datetime.date.today() - datetime.timedelta(days=7)).isoformat())
-    elif filtro == "mes":
-        query = query.gte("fecha_creacion", (datetime.date.today() - datetime.timedelta(days=30)).isoformat())
-    elif filtro == "6meses":
-        query = query.gte("fecha_creacion", (datetime.date.today() - datetime.timedelta(days=180)).isoformat())
-
-    resp = query.order("fecha_creacion", desc=True).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/planes", methods=["POST"])
-def crear_plan():
-    data = request.get_json()
-    payload = {
-        "id_entrenamiento": str(uuid.uuid4()),
-        "id_miembro": data.get("id_miembro"),
-        "id_entrenador": data.get("id_entrenador"),
-        "descripcion": data.get("descripcion"),
-        "duracion_semanas": data.get("duracion_semanas"),
-        "sesiones_semana": data.get("sesiones_semana"),
-        "nivel": data.get("nivel")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("m_entrenamientos_personales").insert(payload).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/planes/<id_entrenamiento>", methods=["PUT"])
-def actualizar_plan(id_entrenamiento):
-    data = request.get_json()
-    payload = {
-        "descripcion": data.get("descripcion"),
-        "duracion_semanas": data.get("duracion_semanas"),
-        "sesiones_semana": data.get("sesiones_semana"),
-        "nivel": data.get("nivel")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("m_entrenamientos_personales").update(payload).eq("id_entrenamiento", id_entrenamiento).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/planes/<id_entrenamiento>", methods=["DELETE"])
-def eliminar_plan(id_entrenamiento):
-    resp = supabase.table("m_entrenamientos_personales").delete().eq("id_entrenamiento", id_entrenamiento).execute()
-    return jsonify(resp.data), 200
-
-# FUNCIONES SECCION SEGUIMIENTO DIARIO / MODULO ENTRENAMIENTOS PERSONALIZADOS - ENTRENADOR
-
-@app.route("/api/progreso/<id_progreso>", methods=["PUT"])
-def actualizar_progreso_otro(id_progreso):
-    data = request.get_json()
-    payload = {
-        "peso": data.get("peso"),
-        "grasa_corporal": data.get("grasa_corporal"),
-        "masa_muscular": data.get("masa_muscular"),
-        "notas": data.get("notas"),
-        "objetivo_personal": data.get("objetivo_personal"),
-        "fecha": data.get("fecha")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("progreso").update(payload).eq("id_progreso", id_progreso).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/progreso/<id_progreso>", methods=["DELETE"])
-def eliminar_progreso_getion(id_progreso):
-    try:
-        uuid_obj = uuid.UUID(id_progreso)
-    except ValueError:
-        return jsonify({"error": "ID inválido"}), 400
-    resp = supabase.table("progreso").delete().eq("id_progreso", str(uuid_obj)).execute()
-    return jsonify(resp.data), 200
-
-# FUNCIONES SECCION FEEDBACK / MODULO ENTRENAMIENTOS PERSONALIZADOS - ENTRENADOR
-
-@app.route("/api/feedback/<id_miembro>", methods=["GET"])
-def obtener_feedback(id_miembro):
-    resp = supabase.table("m_feedback_entrenadores").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=False).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/feedback", methods=["POST"])
-def crear_feedback():
-    data = request.get_json()
-    cal = int(data.get("calificacion", 0))
-    if cal < 1 or cal > 5:
-        return jsonify({"error": "calificacion invalida"}), 400
-    if not data.get("mensaje") or not data.get("mensaje").strip():
-        return jsonify({"error": "mensaje requerido"}), 400
-    payload = {
-        "id_feedback": str(uuid.uuid4()),
-        "id_entrenador": data.get("id_entrenador"),
-        "id_miembro": data.get("id_miembro"),
-        "mensaje": data.get("mensaje"),
-        "calificacion": cal
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("m_feedback_entrenadores").insert(payload).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/feedback/<id_feedback>", methods=["PUT"])
-def actualizar_feedback(id_feedback):
-    data = request.get_json()
-    cal = int(data.get("calificacion", 0))
-    if cal < 1 or cal > 5:
-        return jsonify({"error": "calificacion invalida"}), 400
-    payload = {
-        "mensaje": data.get("mensaje"),
-        "calificacion": cal
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("m_feedback_entrenadores").update(payload).eq("id_feedback", id_feedback).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/feedback/<id_feedback>", methods=["DELETE"])
-def eliminar_feedback(id_feedback):
-    resp = supabase.table("m_feedback_entrenadores").delete().eq("id_feedback", id_feedback).execute()
-    return jsonify(resp.data), 200
-
-# FIN MODULO - ENTRENADOR
 
 # MODULO ADMINISTRADOR
 
@@ -992,6 +544,212 @@ def admin_marketing_get():
         "carrusel": carrusel,
         "secciones": secciones
     })
+
+
+
+
+
+
+
+# CREACION - FALTA
+
+# MODULOS MIEMBROS - ARREGLAR
+
+@app.route("/index_miembro")
+def index_miembro():
+    return render_template("inicio.html", user=session.get("user"))
+
+@app.route("/miembros_modulos_render/<modulo>")
+def miembros_modulos_render(modulo):
+    return render_template(f"member_modules/{modulo}.html", user=session.get("user"))
+
+# FUNCIONES PROGRESO DE MIEMBROS - ENTRENADOR
+
+@app.route("/miembros_progreso")
+def miembros_progreso():
+    miembros_data = supabase.table("usuarios").select(
+        "id_usuario,nombre,apellido,roles(nombre_rol),progreso(id_progreso,peso,grasa_corporal,masa_muscular,calorias_quemadas,fuerza,resistencia,fecha,objetivo_personal),entrenamientos_personales!entrenamientos_personales_id_miembro_fkey(id_entrenador)"
+    ).eq("roles.nombre_rol", "miembro").execute()
+
+    miembros = []
+    for m in miembros_data.data:
+        historial = m.get("progreso", [])
+        ultimo = max(historial, key=lambda x: x["fecha"], default={})
+        entrenador_nombre = ""
+        if m.get("entrenamientos_personales"):
+            entrenador_id = m["entrenamientos_personales"][0].get("id_entrenador")
+            if entrenador_id:
+                entrenador_data = supabase.table("usuarios").select("nombre,apellido").eq("id_usuario", entrenador_id).execute()
+                if entrenador_data.data:
+                    entrenador_nombre = f'{entrenador_data.data[0]["nombre"]} {entrenador_data.data[0]["apellido"]}'
+        miembros.append({
+            "id": m["id_usuario"],
+            "nombre": f'{m["nombre"]} {m["apellido"]}',
+            "entrenador": entrenador_nombre,
+            "peso": ultimo.get("peso", 0),
+            "grasa_corporal": ultimo.get("grasa_corporal", 0),
+            "masa_muscular": ultimo.get("masa_muscular", 0),
+            "fuerza": ultimo.get("fuerza", 0),
+            "resistencia": ultimo.get("resistencia", 0),
+            "calorias": ultimo.get("calorias_quemadas", 0),
+            "ultima_sesion": ultimo.get("fecha", ""),
+            "objetivo_personal": ultimo.get("objetivo_personal", "")
+        })
+    return jsonify({"ok": True, "miembros": miembros})
+
+@app.route("/entrenadores")
+def entrenadores():
+    rol_entrenador = supabase.table("roles").select("id_rol").eq("nombre_rol", "Entrenador").execute()
+    if not rol_entrenador.data:
+        return jsonify({"ok": False, "entrenadores": []})
+    id_rol_entrenador = rol_entrenador.data[0]["id_rol"]
+
+    entrenadores_data = supabase.table("usuarios").select("id_usuario,nombre,apellido").eq("id_rol", id_rol_entrenador).execute()
+    entrenadores = [
+        {"id": e["id_usuario"], "nombre": f'{e["nombre"]} {e["apellido"]}'}
+        for e in entrenadores_data.data
+    ]
+    return jsonify({"ok": True, "entrenadores": entrenadores})
+
+@app.route("/miembro_detalle/<id>")
+def miembro_detalle(id):
+    historial_data = supabase.table("progreso").select(
+        "fecha,peso,grasa_corporal,masa_muscular,fuerza,resistencia,calorias_quemadas,objetivo_personal"
+    ).eq("id_miembro", id).order("fecha", ascending=True).execute()
+    historial = historial_data.data
+    if historial:
+        for h in historial:
+            h["calorias"] = h.pop("calorias_quemadas", 0)
+        return jsonify({"ok": True, "historial": historial})
+    return jsonify({"ok": False})
+
+@app.route("/clases_reservas", methods=["GET","POST"])
+def clases_reservas():
+    if request.method=="GET":
+        if request.headers.get("Accept")=="application/json":
+            clases = supabase.table("clases").select("*").execute()
+            reservas = supabase.table("reservas").select("*").execute()
+            return jsonify({"ok": True, "clases": getattr(clases,"data",[]), "reservas": getattr(reservas,"data",[])})
+
+        return render_template("member_modules/clases_reservas.html", user=session.get("user"))
+
+    data = request.get_json()
+    insert = supabase.table("reservas").insert(data).execute()
+    return jsonify(insert.data), 201
+
+@app.route("/plan_nutricional", methods=["GET","POST"])
+def plan_nutricional():
+    if request.method=="GET":
+        if request.headers.get("Accept")=="application/json":
+            planes = supabase.table("planes_nutricion").select("*").execute()
+            return jsonify({"ok": True, "planes": getattr(planes,"data",[])})
+
+        return render_template("member_modules/plan_nutricional.html", user=session.get("user"))
+
+    data = request.get_json()
+    insert = supabase.table("planes_nutricion").insert(data).execute()
+    return jsonify(insert.data), 201
+
+@app.route("/progreso_entrenamiento", methods=["GET","POST"])
+def progreso_entrenamiento():
+    if request.method=="GET":
+        if request.headers.get("Accept")=="application/json":
+            progreso = supabase.table("progreso").select("*").execute()
+            return jsonify({"ok": True, "progreso": getattr(progreso,"data",[])})
+
+        return render_template("member_modules/progreso_entrenamiento.html", user=session.get("user"))
+
+    data = request.get_json()
+    insert = supabase.table("progreso").insert(data).execute()
+    return jsonify(insert.data), 201
+
+@app.route("/feedback_clases", methods=["GET", "POST", "DELETE"])
+def feedback_clases():
+    user = session.get("user")
+    id_usuario = user.get("id_usuario") if user else None
+
+    if request.method == "GET":
+        return render_template("member_modules/soporte.html", user=user)
+
+    if request.method == "POST":
+        data = request.get_json()
+        if data and id_usuario:
+            data["id_usuario"] = id_usuario
+            data["id_comentario"] = str(uuid.uuid4())
+            data["fecha_creacion"] = datetime.now().isoformat()
+            supabase.table("feedback_clases").insert(data).execute()
+
+        return render_template("member_modules/soporte.html", user=user)
+
+    if request.method == "DELETE":
+        data = request.get_json()
+        id_comentario = data.get("id_comentario") if data else None
+        if id_comentario:
+            supabase.table("feedback_clases").delete().eq("id_comentario", id_comentario).execute()
+
+        return render_template("member_modules/soporte.html", user=user)
+
+# INDEXS SIN CONFIGURAR
+
+# MODULO PERFIL - ARREGLAR
+
+@app.route("/index_perfil")
+def index_perfil():
+    return render_template("mi_perfil.html", user=session.get("user"))
+
+@app.route("/api/usuario/actualizar_completo", methods=["POST"])
+def actualizar_completo():
+    if "user_id" not in session:
+        return jsonify({"success": False, "message": "No autenticado"}), 401
+    data = request.form.to_dict()
+    update_fields = {
+        "nombre": data.get("nombrePerfil"),
+        "apellido": data.get("apellidoPerfil"),
+        "telefono": data.get("telefonoPerfil"),
+        "direccion": data.get("direccionPerfil"),
+        "metodo_pago": data.get("metodoPagoPerfil"),
+        "correo": data.get("correoPerfil")
+    }
+    if "imagen_url" in request.files and request.files["imagen_url"]:
+        file = request.files["imagen_url"]
+        if '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
+            filename = secure_filename(file.filename)
+            local_path = os.path.join(UPLOAD_DIR, filename)
+            file.save(local_path)
+            upload_result = cloudinary.uploader.upload(local_path, folder="usuarios")
+            url = upload_result.get("secure_url")
+            update_fields["imagen_url"] = url
+            os.remove(local_path)
+    result = supabase.table("usuarios").update(update_fields).eq("id_usuario", session["user_id"]).execute()
+    return jsonify({"success": result.status_code == 200})
+
+@app.route("/api/usuario/cambiar_contrasena", methods=["POST"])
+def cambiar_contrasena():
+    if "user_id" not in session:
+        return jsonify({"success": False, "message": "No autenticado"}), 401
+    data = request.get_json()
+    nueva = data.get("contrasena")
+    if not nueva:
+        return jsonify({"success": False, "message": "Contraseña vacía"}), 400
+    result = supabase.table("usuarios").update({"contrasena": nueva}).eq("id_usuario", session["user_id"]).execute()
+    return jsonify({"success": result.status_code == 200})
+
+
+@app.route("/index_recepcionista")
+def index_recepcionista():
+    return render_template("inicio.html", user=session.get("user"))
+
+@app.route("/recepcionista_modulos_render/<modulo>")
+def recepcionista_modulos_render(modulo):
+    return render_template(f"receptionist_modules/{modulo}.html", user=session.get("user"))
+
+@app.route("/index_nutricionista")
+def index_nutricionista():
+    return render_template("inicio.html", user=session.get("user"))
+
+@app.route("/nutricionista_modulos_render/<modulo>")
+def nutricionista_modulos_render(modulo):
+    return render_template(f"nutritionist_modules/{modulo}.html", user=session.get("user"))
 
 # APP RUN
 

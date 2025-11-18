@@ -171,7 +171,8 @@ def logout():
 
 
 
-# MODULOS CASI TERMINADOS:
+
+
 # MODULOS ENTRENADOR
 
 @app.route("/index_entrenador")
@@ -181,6 +182,70 @@ def index_entrenador():
 @app.route("/entrenador_modulos_render/<modulo>")
 def entrenador_modulos_render(modulo):
     return render_template(f"trainer_modules/{modulo}.html", user=session.get("user"))
+
+# MODULO MIS CLASES
+
+# FUNCIONES SECCION CALENDARIO / MODULO MIS CLASES - ENTRENADOR
+
+@app.route("/api/entrenador/calendario/crear", methods=["POST"])
+def entrenador_crea_recordatorio_calendario():
+    data = request.get_json()
+    payload = {
+        "id_miembro": data["id_miembro"],
+        "titulo": data["titulo"],
+        "descripcion": data.get("descripcion"),
+        "tipo_recordatorio": data.get("tipo_recordatorio"),
+        "imagen_url": data.get("imagen_url"),
+        "fecha": data.get("fecha"),
+        "hora": data.get("hora")
+    }
+    payload = {k: v for k, v in payload.items() if v is not None}
+    resp = supabase.table("e_registro_calendario").insert(payload).execute()
+    return jsonify(resp.data), 200
+
+@app.route("/api/entrenador/calendario/miembro/<id_miembro>", methods=["GET"])
+def entrenador_listar_calendario_miembro(id_miembro):
+    resp = (
+        supabase.table("e_registro_calendario")
+        .select("*")
+        .eq("id_miembro", id_miembro)
+        .order("fecha", desc=True)
+        .execute()
+    )
+    return jsonify(resp.data), 200
+
+@app.route("/api/entrenador/calendario/<id_recordatorio>", methods=["PUT"])
+def entrenador_actualiza_recordatorio_calendario(id_recordatorio):
+    data = request.get_json()
+    payload = {
+        "titulo": data.get("titulo"),
+        "descripcion": data.get("descripcion"),
+        "tipo_recordatorio": data.get("tipo_recordatorio"),
+        "imagen_url": data.get("imagen_url"),
+        "leida": data.get("leida"),
+        "fecha": data.get("fecha"),
+        "hora": data.get("hora")
+    }
+    payload = {k: v for k, v in payload.items() if v is not None}
+    resp = (
+        supabase.table("e_registro_calendario")
+        .update(payload)
+        .eq("id_recordatorio", id_recordatorio)
+        .execute()
+    )
+    return jsonify(resp.data), 200
+
+@app.route("/api/entrenador/calendario/<id_recordatorio>", methods=["DELETE"])
+def entrenador_elimina_recordatorio_calendario(id_recordatorio):
+    resp = (
+        supabase.table("e_registro_calendario")
+        .delete()
+        .eq("id_recordatorio", id_recordatorio)
+        .execute()
+    )
+    return jsonify(resp.data), 200
+
+# FUNCIONES SECCCION RESERVAS / MODULO MIS CLASES - ENTRENADOR (ARREGLAR TODO)
 
 @app.route("/api/miembros", methods=["GET"])
 def listar_miembros():
@@ -222,6 +287,7 @@ def eliminar_reserva(id_reserva):
     resp = supabase.table("m_reservas").delete().eq("id_reserva", id_reserva).execute()
     return jsonify(resp.data), 200
 
+# FUNCIONES SECCION NOTIFICACIONES / MODULO MIS CLASES - ENTRENADOR
 
 @app.route("/api/notificaciones/<id_notificacion>", methods=["PUT"])
 def actualizar_notificacion(id_notificacion):
@@ -310,68 +376,7 @@ def eliminar_progreso(id_progreso):
     )
     return jsonify(resp.data), 200
 
-@app.route("/api/entrenador/calendario/crear", methods=["POST"])
-def entrenador_crea_recordatorio_calendario():
-    data = request.get_json()
-    payload = {
-        "id_miembro": data["id_miembro"],
-        "titulo": data["titulo"],
-        "descripcion": data.get("descripcion"),
-        "tipo_recordatorio": data.get("tipo_recordatorio"),
-        "imagen_url": data.get("imagen_url"),
-        "fecha": data.get("fecha"),
-        "hora": data.get("hora")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("e_registro_calendario").insert(payload).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/entrenador/calendario/miembro/<id_miembro>", methods=["GET"])
-def entrenador_listar_calendario_miembro(id_miembro):
-    resp = (
-        supabase.table("e_registro_calendario")
-        .select("*")
-        .eq("id_miembro", id_miembro)
-        .order("fecha", desc=True)
-        .execute()
-    )
-    return jsonify(resp.data), 200
-
-@app.route("/api/entrenador/calendario/<id_recordatorio>", methods=["PUT"])
-def entrenador_actualiza_recordatorio_calendario(id_recordatorio):
-    data = request.get_json()
-    payload = {
-        "titulo": data.get("titulo"),
-        "descripcion": data.get("descripcion"),
-        "tipo_recordatorio": data.get("tipo_recordatorio"),
-        "imagen_url": data.get("imagen_url"),
-        "leida": data.get("leida"),
-        "fecha": data.get("fecha"),
-        "hora": data.get("hora")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = (
-        supabase.table("e_registro_calendario")
-        .update(payload)
-        .eq("id_recordatorio", id_recordatorio)
-        .execute()
-    )
-    return jsonify(resp.data), 200
-
-@app.route("/api/entrenador/calendario/<id_recordatorio>", methods=["DELETE"])
-def entrenador_elimina_recordatorio_calendario(id_recordatorio):
-    resp = (
-        supabase.table("e_registro_calendario")
-        .delete()
-        .eq("id_recordatorio", id_recordatorio)
-        .execute()
-    )
-    return jsonify(resp.data), 200
-
-
-
-
-# FUNCIONES SECCION PROGRESO MODULO CLASES - ENTRENADOR
+# FUNCIONES SECCION PROGRESO / MODULO MIS CLASES CLASES - ENTRENADOR
 
 @app.route("/miembros_progreso")
 def miembros_progreso():
@@ -432,7 +437,9 @@ def miembro_detalle(id):
     return jsonify({"ok": False})
 
 
-# FUNCIONES GESTION ENTRENAMIENTOS - ENTRENADOR
+# MODULO ENTRENAMIENTOS PERSONALIZADOS
+
+# FUNCIONES SECCION CARGAR MIEMBROS MODULO / ENTRENAMIENTOS PERSONALIZADOS - ENTRENADOR
 
 @app.route("/api/miembro/<id_miembro>", methods=["GET"])
 def obtener_miembro(id_miembro):
@@ -445,54 +452,11 @@ def obtener_miembro(id_miembro):
     )
     return jsonify(resp.data), 200
 
-@app.route("/api/progreso", methods=["POST"])
-def crear_progreso_gestion():
-    data = request.get_json()
-    payload = {
-        "id_progreso": str(uuid.uuid4()),
-        "id_miembro": data.get("id_miembro"),
-        "fecha": data.get("fecha"),
-        "peso": data.get("peso"),
-        "grasa_corporal": data.get("grasa_corporal"),
-        "masa_muscular": data.get("masa_muscular"),
-        "notas": data.get("notas"),
-        "objetivo_personal": data.get("objetivo_personal")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("progreso").insert(payload).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/progreso/<id_miembro>", methods=["GET"])
-def obtener_progreso_gestion(id_miembro):
-    resp = supabase.table("progreso").select("*").eq("id_miembro", id_miembro).order("fecha", desc=False).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/sesiones/<id_miembro>", methods=["GET"])
-def api_listar_sesiones(id_miembro):
-    resp = supabase.table("entrenamientos_personales").select("*").eq("id_miembro", id_miembro).order("fecha_hora", desc=False).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/sesion", methods=["POST"])
-def crear_sesion():
-    data = request.get_json()
-    payload = {
-        "id_entrenamiento": str(uuid.uuid4()),
-        "id_miembro": data.get("id_miembro"),
-        "id_entrenador": data.get("id_entrenador"),
-        "fecha_hora": data.get("fecha_hora"),
-        "hora_inicio": data.get("hora_inicio"),
-        "duracion": data.get("duracion"),
-        "tipo": data.get("tipo"),
-        "notas": data.get("notas"),
-        "estado": data.get("estado")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("entrenamientos_personales").insert(payload).execute()
-    return jsonify(resp.data), 200
+# FUNCIONES SECCION ESTADO DE SALUD MODULO / ENTRENAMIENTOS PERSONALIZADOS - ENTRENADOR
 
 @app.route("/api/estado_salud/<id_miembro>", methods=["GET"])
 def obtener_estado_salud(id_miembro):
-    resp = supabase.table("estado_salud").select("*").eq("id_miembro", id_miembro).order("fecha", desc=False).execute()
+    resp = supabase.table("m_estado_salud").select("*").eq("id_miembro", id_miembro).order("fecha", desc=False).execute()
     return jsonify(resp.data), 200
 
 @app.route("/api/estado_salud", methods=["POST"])
@@ -506,12 +470,7 @@ def crear_estado_salud():
         "nota": data.get("nota")
     }
     payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("estado_salud").insert(payload).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/estado_salud/<id_estado>", methods=["DELETE"])
-def eliminar_estado_salud(id_estado):
-    resp = supabase.table("estado_salud").delete().eq("id_estado", id_estado).execute()
+    resp = supabase.table("m_estado_salud").insert(payload).execute()
     return jsonify(resp.data), 200
 
 @app.route("/api/estado_salud/<id_estado>", methods=["PUT"])
@@ -523,66 +482,66 @@ def actualizar_estado_salud(id_estado):
         "hora": data.get("hora")
     }
     payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("estado_salud").update(payload).eq("id_estado", id_estado).execute()
+    resp = supabase.table("m_estado_salud").update(payload).eq("id_estado", id_estado).execute()
     return jsonify(resp.data), 200
 
-@app.route("/api/notas/<id_miembro>", methods=["GET"])
-def obtener_notas(id_miembro):
-    resp = supabase.table("feedback_entrenadores").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=False).execute()
+@app.route("/api/estado_salud/<id_estado>", methods=["DELETE"])
+def eliminar_estado_salud(id_estado):
+    resp = supabase.table("m_estado_salud").delete().eq("id_estado", id_estado).execute()
     return jsonify(resp.data), 200
 
-@app.route("/api/notas", methods=["POST"])
-def crear_nota():
-    data = request.get_json()
-    payload = {
-        "id_feedback": str(uuid.uuid4()),
-        "id_entrenador": data.get("id_entrenador"),
-        "id_miembro": data.get("id_miembro"),
-        "mensaje": data.get("mensaje"),
-        "calificacion": None,
-        "respuesta_entrenador": None
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("feedback_entrenadores").insert(payload).execute()
-    return jsonify(resp.data), 200
+# FUNCIONES SECCION PLAN ENTRENAMIENTO PERSONALIZADO / MODULO ENTRENAMIENTOS PERSONALIZADOS - ENTRENADOR
 
 @app.route("/api/planes/<id_miembro>", methods=["GET"])
 def obtener_planes(id_miembro):
-    resp = supabase.table("planes").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=False).execute()
+    filtro = request.args.get("filtro")
+    query = supabase.table("m_entrenamientos_personales").select("*").eq("id_miembro", id_miembro)
+
+    if filtro == "semana":
+        query = query.gte("fecha_creacion", (datetime.date.today() - datetime.timedelta(days=7)).isoformat())
+    elif filtro == "mes":
+        query = query.gte("fecha_creacion", (datetime.date.today() - datetime.timedelta(days=30)).isoformat())
+    elif filtro == "6meses":
+        query = query.gte("fecha_creacion", (datetime.date.today() - datetime.timedelta(days=180)).isoformat())
+
+    resp = query.order("fecha_creacion", desc=True).execute()
     return jsonify(resp.data), 200
 
 @app.route("/api/planes", methods=["POST"])
 def crear_plan():
     data = request.get_json()
     payload = {
-        "id_plan": str(uuid.uuid4()),
+        "id_entrenamiento": str(uuid.uuid4()),
         "id_miembro": data.get("id_miembro"),
-        "objetivo": data.get("descripcion"),
-        "categoria": data.get("categoria"),
-        "semanas": data.get("semanas"),
-        "frecuencia": data.get("frecuencia")
+        "id_entrenador": data.get("id_entrenador"),
+        "descripcion": data.get("descripcion"),
+        "duracion_semanas": data.get("duracion_semanas"),
+        "sesiones_semana": data.get("sesiones_semana"),
+        "nivel": data.get("nivel")
     }
     payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("planes").insert(payload).execute()
+    resp = supabase.table("m_entrenamientos_personales").insert(payload).execute()
     return jsonify(resp.data), 200
 
-@app.route("/api/planes/<id_plan>", methods=["DELETE"])
-def eliminar_plan(id_plan):
-    resp = supabase.table("planes").delete().eq("id_plan", id_plan).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/planes/<id_plan>", methods=["PUT"])
-def actualizar_plan(id_plan):
+@app.route("/api/planes/<id_entrenamiento>", methods=["PUT"])
+def actualizar_plan(id_entrenamiento):
     data = request.get_json()
     payload = {
-        "objetivo": data.get("descripcion"),
-        "categoria": data.get("categoria"),
-        "semanas": data.get("semanas"),
-        "frecuencia": data.get("frecuencia")
+        "descripcion": data.get("descripcion"),
+        "duracion_semanas": data.get("duracion_semanas"),
+        "sesiones_semana": data.get("sesiones_semana"),
+        "nivel": data.get("nivel")
     }
     payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("planes").update(payload).eq("id_plan", id_plan).execute()
+    resp = supabase.table("m_entrenamientos_personales").update(payload).eq("id_entrenamiento", id_entrenamiento).execute()
     return jsonify(resp.data), 200
+
+@app.route("/api/planes/<id_entrenamiento>", methods=["DELETE"])
+def eliminar_plan(id_entrenamiento):
+    resp = supabase.table("m_entrenamientos_personales").delete().eq("id_entrenamiento", id_entrenamiento).execute()
+    return jsonify(resp.data), 200
+
+# FUNCIONES SECCION SEGUIMIENTO DIARIO / MODULO ENTRENAMIENTOS PERSONALIZADOS - ENTRENADOR
 
 @app.route("/api/progreso/<id_progreso>", methods=["PUT"])
 def actualizar_progreso_otro(id_progreso):
@@ -608,48 +567,50 @@ def eliminar_progreso_getion(id_progreso):
     resp = supabase.table("progreso").delete().eq("id_progreso", str(uuid_obj)).execute()
     return jsonify(resp.data), 200
 
+# FUNCIONES SECCION FEEDBACK / MODULO ENTRENAMIENTOS PERSONALIZADOS - ENTRENADOR
+
 @app.route("/api/feedback/<id_miembro>", methods=["GET"])
 def obtener_feedback(id_miembro):
-    resp = supabase.table("feedback_entrenadores").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=False).execute()
+    resp = supabase.table("m_feedback_entrenadores").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=False).execute()
     return jsonify(resp.data), 200
 
 @app.route("/api/feedback", methods=["POST"])
 def crear_feedback():
     data = request.get_json()
+    cal = int(data.get("calificacion", 0))
+    if cal < 1 or cal > 5:
+        return jsonify({"error": "calificacion invalida"}), 400
+    if not data.get("mensaje") or not data.get("mensaje").strip():
+        return jsonify({"error": "mensaje requerido"}), 400
     payload = {
         "id_feedback": str(uuid.uuid4()),
-        "id_entrenador": data.get("id_entrenador") or None,
-        "id_miembro": data.get("id_miembro") or None,
+        "id_entrenador": data.get("id_entrenador"),
+        "id_miembro": data.get("id_miembro"),
         "mensaje": data.get("mensaje"),
-        "respuesta_entrenador": data.get("respuesta_entrenador")
+        "calificacion": cal
     }
     payload = {k: v for k, v in payload.items() if v is not None}
-    if "mensaje" not in payload or not payload["mensaje"].strip():
-        return jsonify({"error": "El campo 'mensaje' es obligatorio"}), 400
-    resp = supabase.table("feedback_entrenadores").insert(payload).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/feedback/<id_feedback>", methods=["DELETE"])
-def eliminar_feedback(id_feedback):
-    resp = supabase.table("feedback_entrenadores").delete().eq("id_feedback", id_feedback).execute()
+    resp = supabase.table("m_feedback_entrenadores").insert(payload).execute()
     return jsonify(resp.data), 200
 
 @app.route("/api/feedback/<id_feedback>", methods=["PUT"])
 def actualizar_feedback(id_feedback):
     data = request.get_json()
+    cal = int(data.get("calificacion", 0))
+    if cal < 1 or cal > 5:
+        return jsonify({"error": "calificacion invalida"}), 400
     payload = {
         "mensaje": data.get("mensaje"),
-        "respuesta_entrenador": data.get("respuesta_entrenador")
+        "calificacion": cal
     }
     payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("feedback_entrenadores").update(payload).eq("id_feedback", id_feedback).execute()
+    resp = supabase.table("m_feedback_entrenadores").update(payload).eq("id_feedback", id_feedback).execute()
     return jsonify(resp.data), 200
 
-
-
-
-
-
+@app.route("/api/feedback/<id_feedback>", methods=["DELETE"])
+def eliminar_feedback(id_feedback):
+    resp = supabase.table("m_feedback_entrenadores").delete().eq("id_feedback", id_feedback).execute()
+    return jsonify(resp.data), 200
 
 
 

@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -6,17 +7,19 @@
 <title>Entrenamientos Personalizados | Entrenador</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/styles_trainer/style_entrenamientos_personalizados.css') }}">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+.star { cursor: pointer; font-size: 1.2rem; color: #d1d1d1; }
+.star.selected { color: gold; }
+.table-feedback td, .table-feedback th { vertical-align: middle; }
+</style>
 </head>
 <body>
-
 {% include 'navbar.html' %}
-
 <div class="content-wrapper">
 <div class="container-central">
-
 <div class="card-title-center mb-4">Gestión de Entrenamientos Personalizados</div>
-
 <div class="card mb-3">
 <div class="card-body">
 <h5>Seleccionar Miembro</h5>
@@ -32,14 +35,12 @@
 </div>
 </div>
 </div>
-
 <div class="card mb-3">
 <div class="card-body">
 <h5>Información del Miembro</h5>
 <div style="color: black;" id="infoMiembro" class="p-3"></div>
 </div>
 </div>
-
 <div class="card mb-3">
 <div class="card-body">
 <h5>Promedio de Calificaciones</h5>
@@ -49,7 +50,6 @@
 <div id="calificacionesTexto" class="mb-2"></div>
 </div>
 </div>
-
 <div class="card mb-3">
 <div class="card-body">
 <h5>Estado de Salud, Lesiones y Riesgos</h5>
@@ -62,13 +62,11 @@
 </div>
 </div>
 <div class="mt-2 d-flex justify-content-between">
-<button class="btn btn-primary btn-sm" onclick="cambiarPagina('salud','prev')">Anterior</button>
-<button class="btn btn-primary btn-sm" onclick="cambiarPagina('salud','next')">Siguiente</button>
 </div>
 <div id="alertasRiesgo" class="mt-3"></div>
+<div class="d-flex justify-content-center mt-2" id="paginacionSalud"></div>
 </div>
 </div>
-
 <div class="card mb-3">
 <div class="card-body">
 <h5>Plan de Entrenamiento Personalizado</h5>
@@ -97,14 +95,10 @@
 <button class="btn btn-outline-secondary btn-sm" onclick="filtrarPlanes('ultimos6Meses')">Últimos 6 meses</button>
 </div>
 <div id="listaPlanes" class="d-flex flex-column gap-2"></div>
-<div class="mt-2 d-flex justify-content-between">
-<button class="btn btn-primary btn-sm" onclick="cambiarPagina('planes','prev')">Anterior</button>
-<button class="btn btn-primary btn-sm" onclick="cambiarPagina('planes','next')">Siguiente</button>
+<div class="d-flex justify-content-center mt-2" id="paginacionPlanes"></div>
 </div>
 </div>
 </div>
-</div>
-
 <div class="card mb-3">
 <div class="card-body">
 <h5>Seguimiento Diario</h5>
@@ -126,10 +120,7 @@
 <button class="btn btn-outline-secondary btn-sm" onclick="filtrarSeguimiento('ultimos6Meses')">Últimos 6 meses</button>
 </div>
 <div id="historialSeguimiento" class="d-flex flex-column gap-2"></div>
-<div class="mt-2 d-flex justify-content-between">
-<button class="btn btn-primary btn-sm" onclick="cambiarPagina('seguimiento','prev')">Anterior</button>
-<button class="btn btn-primary btn-sm" onclick="cambiarPagina('seguimiento','next')">Siguiente</button>
-</div>
+<div class="d-flex justify-content-center mt-2" id="paginacionSeguimiento"></div>
 </div>
 <div class="mt-3">
 <h6>Gráfico de Progreso Combinado</h6>
@@ -137,7 +128,6 @@
 </div>
 </div>
 </div>
-
 <div class="card mb-4">
 <div class="card-body">
 <h5>Feedback del Entrenador</h5>
@@ -145,48 +135,62 @@
 <div class="col-md-9">
 <textarea id="feedbackMensaje" class="form-control" rows="2" placeholder="Escribe un mensaje de feedback para el miembro"></textarea>
 </div>
-<div class="col-md-3">
-<button id="btnCrearFeedback" class="btn btn-success w-100">Enviar Feedback</button>
+<div class="col-md-2">
+<div id="feedbackStars" class="d-flex gap-1 align-items-center">
+<i class="bi bi-star star" data-value="1"></i>
+<i class="bi bi-star star" data-value="2"></i>
+<i class="bi bi-star star" data-value="3"></i>
+<i class="bi bi-star star" data-value="4"></i>
+<i class="bi bi-star star" data-value="5"></i>
+</div>
+</div>
+<div class="col-md-1">
+<button id="btnCrearFeedback" class="btn btn-success w-100">Enviar</button>
 </div>
 <div class="col-12 mt-3">
 <h6>Historial de Feedback</h6>
-<div id="listaFeedback" class="d-flex flex-column gap-2"></div>
+<table class="table table-striped table-feedback">
+<thead>
+<tr>
+<th style="width:120px">Calificación</th>
+<th>Mensaje</th>
+<th style="width:140px">Fecha</th>
+<th style="width:140px">Acciones</th>
+</tr>
+</thead>
+<tbody id="tablaFeedback"></tbody>
+</table>
 </div>
 </div>
 </div>
 </div>
-
 </div>
 </div>
-
 <div class="modal fade" id="modalFeedback" tabindex="-1">
 <div class="modal-dialog modal-dialog-centered">
 <div class="modal-content">
 <div class="modal-header">
-<h5 class="modal-title">Feedback</h5>
+<h5 class="modal-title">Editar Feedback</h5>
 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
 </div>
 <div class="modal-body">
-<div id="modalView">
-<p id="modalMensaje" class="fw-bold"></p>
-<p id="modalRespuesta" class="text-secondary"></p>
-<div class="d-flex justify-content-between mt-3">
-<button id="btnEditarFeedback" class="btn btn-warning w-50 me-2">Editar</button>
-<button id="btnEliminarFeedback" class="btn btn-danger w-50">Eliminar</button>
+<textarea id="modalFeedbackMensaje" class="form-control mb-3" rows="3"></textarea>
+<div class="d-flex gap-2 justify-content-center" id="modalStars">
+<i class="bi bi-star star" data-value="1"></i>
+<i class="bi bi-star star" data-value="2"></i>
+<i class="bi bi-star star" data-value="3"></i>
+<i class="bi bi-star star" data-value="4"></i>
+<i class="bi bi-star star" data-value="5"></i>
 </div>
 </div>
-<div id="modalEdit" class="d-none">
-<textarea id="inputEditarMensaje" class="form-control" rows="3"></textarea>
-<div class="d-flex justify-content-between mt-3">
-<button id="btnGuardarEdicion" class="btn btn-success w-50 me-2">Guardar</button>
-<button class="btn btn-secondary w-50" data-bs-dismiss="modal">Cancelar</button>
-</div>
-</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+<button id="btnGuardarModal" class="btn btn-primary">Guardar</button>
 </div>
 </div>
 </div>
 </div>
-
+{% include 'footer.html' %}
 <script>
 const apiMiembros="/api/miembros";
 const apiMiembro="/api/miembro/";
@@ -203,21 +207,25 @@ let paginaPlanes=0,paginaSeguimiento=0,paginaSalud=0,registroMax=10;
 let planesData=[],planesDataOriginal=[],seguimientoData=[],seguimientoDataOriginal=[],saludData=[],saludDataOriginal=[];
 let editPlanId=null,editSeguimientoId=null,editFeedbackId=null;
 let graficoProgreso=null;
-
+let ID_MIEMBRO_GLOBAL=null;
+let estrellaSeleccionada=0;
+let estrellaModalSeleccionada=0;
 document.addEventListener("DOMContentLoaded",()=>{
 document.getElementById("btnCargarDatos").onclick=cargarDatosMiembro;
 document.getElementById("btnCrearPlan").onclick=crearPlan;
 document.getElementById("btnRegistrarSeguimiento").onclick=registrarSeguimiento;
 document.getElementById("btnGuardarRiesgos").onclick=guardarRiesgos;
 document.getElementById("btnCrearFeedback").onclick=crearFeedback;
+document.getElementById("btnGuardarModal").onclick=guardarEdicionFeedback;
 cargarMiembros();
+document.querySelectorAll("#feedbackStars .star").forEach(s=>s.addEventListener("click",()=>{estrellaSeleccionada=parseInt(s.dataset.value);actualizarEstrellas("#feedbackStars",estrellaSeleccionada)}));
+document.querySelectorAll("#modalStars .star").forEach(s=>s.addEventListener("click",()=>{estrellaModalSeleccionada=parseInt(s.dataset.value);actualizarEstrellas("#modalStars",estrellaModalSeleccionada)}));
 });
-
 async function cargarMiembros(){
 const r=await fetch(apiMiembros);
 const d=await r.json();
 const s=document.getElementById("selectMiembro");
-s.innerHTML="";
+s.innerHTML="<option value=''>Selecciona un miembro...</option>";
 d.forEach(x=>{
 const o=document.createElement("option");
 o.value=x.id_usuario;
@@ -225,10 +233,10 @@ o.textContent=x.nombre+" "+x.apellido;
 s.appendChild(o);
 });
 }
-
 async function cargarDatosMiembro(){
 const id=document.getElementById("selectMiembro").value;
 if(!id) return;
+ID_MIEMBRO_GLOBAL=id;
 const r=await fetch(apiMiembro+id);
 const d=await r.json();
 document.getElementById("infoMiembro").innerHTML=`Nombre: ${d.nombre} ${d.apellido}<br>Género: ${d.genero}<br>Correo: ${d.correo}<br>Teléfono: ${d.telefono}<br>Dirección: ${d.direccion}<br>Cédula: ${d.cedula}<br>Fecha de nacimiento: ${d.fecha_nacimiento}`;
@@ -238,23 +246,29 @@ await cargarRiesgos(id);
 await cargarFeedback(id);
 await cargarCalificaciones(id);
 }
-
 async function cargarCalificaciones(id){
 const r=await fetch(apiFeedback+"/"+id);
 const d=await r.json();
 let total=d.length;
-let buenas=d.filter(f=>f.calificacion>=4).length;
-let porcentaje=total?Math.round((buenas/total)*100):0;
+let suma=d.reduce((acc,it)=>acc+(it.calificacion||0),0);
+let promedio= total? (suma/total):0;
+let porcentaje=Math.round((promedio/5)*100);
 document.getElementById("barraSatisfaccion").style.width=porcentaje+"%";
 document.getElementById("barraSatisfaccion").textContent=porcentaje+"%";
-document.getElementById("calificacionesTexto").textContent=`Buenas: ${buenas} / Total: ${total}`;
+document.getElementById("calificacionesTexto").textContent=`Promedio: ${promedio.toFixed(2)} / Total: ${total}`;
 }
-
 async function crearPlan(){
 const id=document.getElementById("selectMiembro").value;
 if(!id) return;
 let idEntrenador=rolActual==='entrenador'?idUsuarioActual:null;
-const body={id_miembro:id,id_entrenador:idEntrenador,descripcion:planObjetivo.value,categoria:planCategoria.value,semanas:planSemanas.value,frecuencia:planFrecuencia.value};
+const body={
+id_miembro:id,
+id_entrenador:idEntrenador,
+descripcion:document.getElementById("planObjetivo").value,
+duracion_semanas: document.getElementById("planSemanas").value ? Number(document.getElementById("planSemanas").value) : null,
+sesiones_semana: document.getElementById("planFrecuencia").value ? Number(document.getElementById("planFrecuencia").value) : null,
+nivel: document.getElementById("planCategoria").value
+};
 if(editPlanId){
 await fetch(`${apiPlanes}/${editPlanId}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
 editPlanId=null;
@@ -263,20 +277,16 @@ document.getElementById("btnCrearPlan").textContent="Crear Plan";
 await fetch(apiPlanes,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
 }
 await cargarPlanes(id);
-planObjetivo.value="";
-planSemanas.value="";
-planFrecuencia.value="";
-planCategoria.value="principiante";
+document.getElementById("planObjetivo").value="";document.getElementById("planSemanas").value="";document.getElementById("planFrecuencia").value="";document.getElementById("planCategoria").value="principiante";
 }
-
 async function cargarPlanes(id){
 const r=await fetch(apiListarPlanes+id);
 planesDataOriginal=await r.json();
 planesData=[...planesDataOriginal];
 paginaPlanes=0;
 renderPlanes();
+renderPaginacionPlanes();
 }
-
 function renderPlanes(){
 const c=document.getElementById("listaPlanes");
 c.innerHTML="";
@@ -285,49 +295,40 @@ let end=start+registroMax;
 planesData.slice(start,end).forEach(x=>{
 const e=document.createElement("div");
 e.className="border p-2 rounded d-flex justify-content-between align-items-center";
-e.innerHTML=`<span>${x.objetivo||x.descripcion} (${x.categoria||"-"})</span><div><button class="btn btn-sm btn-warning me-1" onclick="editarPlan('${x.id_plan}')">Editar</button><button class="btn btn-sm btn-danger" onclick="eliminarPlan('${x.id_plan}')">Eliminar</button></div>`;
+e.innerHTML=`<span><b>${x.descripcion || "-"}</b> — Semanas: ${x.duracion_semanas||0}, Sesiones/sem: ${x.sesiones_semana||0}, Nivel: ${x.nivel||"-"} — ${x.fecha_creacion||""}</span><div><button class="btn btn-sm btn-warning me-1" onclick="editarPlan('${x.id_entrenamiento}')">Editar</button><button class="btn btn-sm btn-danger" onclick="eliminarPlan('${x.id_entrenamiento}')">Eliminar</button></div>`;
 c.appendChild(e);
 });
 }
-
-function cambiarPagina(seccion,direccion){
-if(seccion==='planes'){
-if(direccion==='prev' && paginaPlanes>0) paginaPlanes--;
-if(direccion==='next' && (paginaPlanes+1)*registroMax<planesData.length) paginaPlanes++;
-renderPlanes();
-}
-if(seccion==='seguimiento'){
-if(direccion==='prev' && paginaSeguimiento>0) paginaSeguimiento--;
-if(direccion==='next' && (paginaSeguimiento+1)*registroMax<seguimientoData.length) paginaSeguimiento++;
-renderSeguimiento();
-}
-if(seccion==='salud'){
-if(direccion==='prev' && paginaSalud>0) paginaSalud--;
-if(direccion==='next' && (paginaSalud+1)*registroMax<saludData.length) paginaSalud++;
-renderSalud();
+function renderPaginacionPlanes(){
+const cont=document.getElementById("paginacionPlanes");
+cont.innerHTML="";
+const totalPaginas=Math.ceil(planesData.length/registroMax)||1;
+for(let i=0;i<totalPaginas;i++){
+const btn=document.createElement("button");
+btn.className=`btn btn-sm mx-1 ${i===paginaPlanes?"btn-primary":"btn-outline-primary"}`;
+btn.textContent=(i+1);
+btn.addEventListener("click",()=>{paginaPlanes=i;renderPlanes();renderPaginacionPlanes();});
+cont.appendChild(btn);
 }
 }
-
 async function eliminarPlan(id){
 await fetch(`${apiPlanes}/${id}`,{method:'DELETE'});
 await cargarPlanes(document.getElementById("selectMiembro").value);
 }
-
 async function editarPlan(id){
-let p=planesData.find(x=>x.id_plan===id);
-planObjetivo.value=p.objetivo||p.descripcion;
-planSemanas.value=p.semanas;
-planFrecuencia.value=p.frecuencia;
-planCategoria.value=p.categoria;
+let p=planesData.find(x=>x.id_entrenamiento===id);
+document.getElementById("planObjetivo").value=p.descripcion||"";
+document.getElementById("planSemanas").value=p.duracion_semanas||"";
+document.getElementById("planFrecuencia").value=p.sesiones_semana||"";
+document.getElementById("planCategoria").value=p.nivel||"principiante";
 editPlanId=id;
 document.getElementById("btnCrearPlan").textContent="Guardar Cambios";
 }
-
 async function registrarSeguimiento(){
 const id=document.getElementById("selectMiembro").value;
 if(!id) return;
 let idEntrenador=rolActual==='entrenador'?idUsuarioActual:null;
-const body={id_miembro:id,id_entrenador:idEntrenador,peso:Number(peso.value),grasa_corporal:Number(grasa.value),masa_muscular:Number(musculo.value),notas:notasPrivadas.value};
+const body={id_miembro:id,id_entrenador:idEntrenador,peso:Number(document.getElementById("peso").value),grasa_corporal:Number(document.getElementById("grasa").value),masa_muscular:Number(document.getElementById("musculo").value),notas:document.getElementById("notasPrivadas").value};
 let actualizarGrafica=false;
 if(editSeguimientoId){
 const registro=seguimientoData.find(x=>x.id_progreso===editSeguimientoId);
@@ -342,17 +343,16 @@ actualizarGrafica=true;
 await fetch(apiProgreso,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
 }
 await cargarSeguimiento(id,actualizarGrafica);
-peso.value="";grasa.value="";musculo.value="";notasPrivadas.value="";
+document.getElementById("peso").value="";document.getElementById("grasa").value="";document.getElementById("musculo").value="";document.getElementById("notasPrivadas").value="";
 }
-
 async function cargarSeguimiento(id,actualizarGrafica=true){
 const r=await fetch(apiListarProgreso+id);
 seguimientoDataOriginal=await r.json();
 seguimientoData=[...seguimientoDataOriginal];
 paginaSeguimiento=0;
 renderSeguimiento(actualizarGrafica);
+renderPaginacionSeguimiento();
 }
-
 function renderSeguimiento(actualizarGrafica=true){
 const c=document.getElementById("historialSeguimiento");
 c.innerHTML="";
@@ -371,7 +371,18 @@ datosMusculo.push(x.masa_muscular||0);
 });
 if(actualizarGrafica) actualizarGraficoCombinado(labels,datosPeso,datosGrasa,datosMusculo);
 }
-
+function renderPaginacionSeguimiento(){
+const cont=document.getElementById("paginacionSeguimiento");
+cont.innerHTML="";
+const total=Math.ceil(seguimientoData.length/registroMax)||1;
+for(let i=0;i<total;i++){
+const btn=document.createElement("button");
+btn.className=`btn btn-sm mx-1 ${i===paginaSeguimiento?"btn-primary":"btn-outline-primary"}`;
+btn.textContent=(i+1);
+btn.addEventListener("click",()=>{paginaSeguimiento=i;renderSeguimiento();renderPaginacionSeguimiento();});
+cont.appendChild(btn);
+}
+}
 function actualizarGraficoCombinado(labels,peso,grasa,musculo){
 const ctx=document.getElementById("graficoProgreso");
 if(graficoProgreso) graficoProgreso.destroy();
@@ -388,39 +399,34 @@ datasets:[
 options:{responsive:true,plugins:{legend:{display:true}},interaction:{mode:"index",intersect:false},scales:{y:{beginAtZero:true}}}
 });
 }
-
 async function editarSeguimiento(id){
 let p=seguimientoData.find(x=>x.id_progreso===id);
-peso.value=p.peso;
-grasa.value=p.grasa_corporal;
-musculo.value=p.masa_muscular;
-notasPrivadas.value=p.notas||"";
+document.getElementById("peso").value=p.peso;
+document.getElementById("grasa").value=p.grasa_corporal;
+document.getElementById("musculo").value=p.masa_muscular;
+document.getElementById("notasPrivadas").value=p.notas||"";
 editSeguimientoId=id;
 document.getElementById("btnRegistrarSeguimiento").textContent="Guardar Cambios";
 }
-
 async function eliminarSeguimiento(id){
-const registro=seguimientoData.find(x=>x.id_progreso===id);
 await fetch(`${apiProgreso}/${id}`,{method:'DELETE'});
 await cargarSeguimiento(document.getElementById("selectMiembro").value,true);
 }
-
 async function guardarRiesgos(){
 const id=document.getElementById("selectMiembro").value;
 if(!id) return;
-await fetch(apiRiesgos,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id_miembro:id,nota:riesgosSalud.value})});
+await fetch(apiRiesgos,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id_miembro:id,nota:document.getElementById("riesgosSalud").value})});
 await cargarRiesgos(id);
-riesgosSalud.value="";
+document.getElementById("riesgosSalud").value="";
 }
-
 async function cargarRiesgos(id){
 const r=await fetch(apiRiesgosListar+id);
 saludDataOriginal=await r.json();
 saludData=[...saludDataOriginal];
 paginaSalud=0;
 renderSalud();
+renderPaginacionSalud();
 }
-
 function renderSalud(){
 const c=document.getElementById("alertasRiesgo");
 c.innerHTML="";
@@ -434,67 +440,72 @@ e.innerHTML=`<span>${x.nota}</span><button class="btn btn-sm btn-danger" onclick
 c.appendChild(e);
 });
 }
-
+function renderPaginacionSalud(){
+const cont=document.getElementById("paginacionSalud");
+cont.innerHTML="";
+const total=Math.ceil(saludData.length/registroMax)||1;
+for(let i=0;i<total;i++){
+const btn=document.createElement("button");
+btn.className=`btn btn-sm mx-1 ${i===paginaSalud?"btn-primary":"btn-outline-primary"}`;
+btn.textContent=(i+1);
+btn.addEventListener("click",()=>{paginaSalud=i;renderSalud();renderPaginacionSalud();});
+cont.appendChild(btn);
+}
+}
 async function eliminarRiesgo(id){
 if(!id) return;
 await fetch(`${apiRiesgos}/${id}`,{method:'DELETE'});
 await cargarRiesgos(document.getElementById("selectMiembro").value);
 }
-
 async function crearFeedback(){
 const id=document.getElementById("selectMiembro").value;
 if(!id) return;
 let idEntrenador=rolActual==='entrenador'?idUsuarioActual:null;
-await fetch(apiFeedback,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id_miembro:id,id_entrenador:idEntrenador,mensaje:feedbackMensaje.value})});
-feedbackMensaje.value="";
+const mensaje=document.getElementById("feedbackMensaje").value;
+if(!mensaje || !mensaje.trim()) return;
+if(estrellaSeleccionada<1) return;
+const payload={id_miembro:id,id_entrenador:idEntrenador,mensaje:mensaje,calificacion:estrellaSeleccionada};
+await fetch(apiFeedback,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+document.getElementById("feedbackMensaje").value="";estrellaSeleccionada=0;actualizarEstrellas("#feedbackStars",0);
 await cargarFeedback(id);
+await cargarCalificaciones(id);
 }
-
 async function cargarFeedback(id){
 const r=await fetch(apiFeedback+"/"+id);
 const d=await r.json();
-const c=document.getElementById("listaFeedback");
-c.innerHTML="";
+const tbody=document.getElementById("tablaFeedback");
+tbody.innerHTML="";
 d.forEach(x=>{
-const e=document.createElement("div");
-e.className="border p-2 rounded";
-e.textContent=x.fecha_creacion+" — "+(x.mensaje||"")+(x.respuesta_entrenador?" — Respuesta: "+x.respuesta_entrenador:"");
-e.onclick=()=>mostrarModalFeedback(x);
-c.appendChild(e);
+const tr=document.createElement("tr");
+const stars="★".repeat(x.calificacion||0)+ "☆".repeat(5-(x.calificacion||0));
+tr.innerHTML=`<td class="text-warning fs-5">${stars}</td><td>${x.mensaje}</td><td>${x.fecha_creacion || x.fecha || ""}</td><td><div class="d-flex gap-2"><button class="btn btn-sm btn-warning btnEditar" data-id="${x.id_feedback}">Editar</button><button class="btn btn-sm btn-danger btnEliminar" data-id="${x.id_feedback}">Eliminar</button></div></td>`;
+tbody.appendChild(tr);
+tr.querySelector(".btnEditar").addEventListener("click",()=>{abrirModalEdicion(x);});
+tr.querySelector(".btnEliminar").addEventListener("click",async ()=>{await fetch(`${apiFeedback}/${x.id_feedback}`,{method:"DELETE"});await cargarFeedback(ID_MIEMBRO_GLOBAL);await cargarCalificaciones(ID_MIEMBRO_GLOBAL);});
 });
 }
-
-function mostrarModalFeedback(feedback){
+function actualizarEstrellas(selector,valor){
+document.querySelectorAll(selector+" .star").forEach(s=>{s.classList.toggle("selected", parseInt(s.dataset.value) <= valor);});
+}
+function abrirModalEdicion(feedback){
 editFeedbackId=feedback.id_feedback;
-document.getElementById("modalMensaje").textContent=feedback.mensaje||"";
-document.getElementById("modalRespuesta").textContent=feedback.respuesta_entrenador?`Respuesta: ${feedback.respuesta_entrenador}`:"";
-document.getElementById("modalView").classList.remove("d-none");
-document.getElementById("modalEdit").classList.add("d-none");
+document.getElementById("modalFeedbackMensaje").value=feedback.mensaje||"";
+estrellaModalSeleccionada=feedback.calificacion||0;
+actualizarEstrellas("#modalStars",estrellaModalSeleccionada);
 new bootstrap.Modal(document.getElementById("modalFeedback")).show();
-
-document.getElementById("btnEditarFeedback").onclick=()=>{
-document.getElementById("modalView").classList.add("d-none");
-document.getElementById("modalEdit").classList.remove("d-none");
-document.getElementById("inputEditarMensaje").value=feedback.mensaje||"";
-};
-
-document.getElementById("btnGuardarEdicion").onclick=async ()=>{
-const nuevoMensaje=document.getElementById("inputEditarMensaje").value;
-if(nuevoMensaje){
-await fetch(`${apiFeedback}/${feedback.id_feedback}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({mensaje:nuevoMensaje})});
-await cargarFeedback(document.getElementById("selectMiembro").value);
-document.getElementById("modalView").classList.remove("d-none");
-document.getElementById("modalEdit").classList.add("d-none");
 }
-};
-
-document.getElementById("btnEliminarFeedback").onclick=async ()=>{
-await fetch(`${apiFeedback}/${feedback.id_feedback}`,{method:"DELETE"});
-await cargarFeedback(document.getElementById("selectMiembro").value);
-};
-
+async function guardarEdicionFeedback(){
+if(!editFeedbackId) return;
+const nuevoMensaje=document.getElementById("modalFeedbackMensaje").value;
+if(!nuevoMensaje || !nuevoMensaje.trim()) return;
+if(estrellaModalSeleccionada<1) return;
+const payload={mensaje:nuevoMensaje,calificacion:estrellaModalSeleccionada};
+await fetch(`${apiFeedback}/${editFeedbackId}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+editFeedbackId=null;
+bootstrap.Modal.getInstance(document.getElementById("modalFeedback")).hide();
+await cargarFeedback(ID_MIEMBRO_GLOBAL);
+await cargarCalificaciones(ID_MIEMBRO_GLOBAL);
 }
-
 function filtrarPlanes(filtro){
 planesData=[...planesDataOriginal];
 const hoy=new Date();
@@ -505,11 +516,11 @@ case"estaSemana": fd=new Date(hoy.setDate(hoy.getDate()-hoy.getDay())); break;
 case"mes": fd=new Date(hoy.getFullYear(),hoy.getMonth(),1); break;
 case"ultimos6Meses": fd=new Date(hoy.setMonth(hoy.getMonth()-6)); break;
 }
-planesData=planesData.filter(p=>new Date(p.fecha_creacion)>=fd);
+planesData=planesData.filter(p=>p.fecha_creacion && new Date(p.fecha_creacion) >= fd);
 paginaPlanes=0;
 renderPlanes();
+renderPaginacionPlanes();
 }
-
 function filtrarSeguimiento(filtro){
 seguimientoData=[...seguimientoDataOriginal];
 const hoy=new Date();
@@ -520,11 +531,11 @@ case"estaSemana": fd=new Date(hoy.setDate(hoy.getDate()-hoy.getDay())); break;
 case"mes": fd=new Date(hoy.getFullYear(),hoy.getMonth(),1); break;
 case"ultimos6Meses": fd=new Date(hoy.setMonth(hoy.getMonth()-6)); break;
 }
-seguimientoData=seguimientoData.filter(s=>new Date(s.fecha)>=fd);
+seguimientoData=seguimientoData.filter(s=>s.fecha && new Date(s.fecha)>=fd);
 paginaSeguimiento=0;
 renderSeguimiento();
+renderPaginacionSeguimiento();
 }
-
 function filtrarSalud(filtro){
 saludData=[...saludDataOriginal];
 const hoy=new Date();
@@ -538,9 +549,9 @@ case"ultimos6Meses": fd=new Date(hoy.setMonth(hoy.getMonth()-6)); break;
 saludData=saludData.filter(s=>s.fecha && new Date(s.fecha)>=fd);
 paginaSalud=0;
 renderSalud();
+renderPaginacionSalud();
 }
 </script>
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
