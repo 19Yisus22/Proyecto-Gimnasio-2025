@@ -27,10 +27,10 @@
       {% set rol_nombre = user['rol']['nombre_rol'] %}
       {% if rol_nombre == 'miembro' %}
         <li><a href="/index_miembro" class="nav-link"><i class="bi bi-house-door me-2"></i>Inicio</a></li>
-        <li><a href="/miembros_modulos_render/clases_reservas" class="nav-link"><i class="bi bi-calendar-check me-2"></i>Clases y Reservas</a></li>
+        <li><a href="/miembros_modulos_render/gestion_reservas" class="nav-link"><i class="bi bi-calendar-check me-2"></i>Clases y Reservas</a></li>
         <li><a href="/miembros_modulos_render/progreso_entrenamiento" class="nav-link"><i class="bi bi-graph-up me-2"></i>Progreso Físico</a></li>
         <li><a href="/miembros_modulos_render/plan_nutricional" class="nav-link"><i class="bi bi-apple me-2"></i>Plan Nutricional</a></li>
-        <li><a href="/miembros_modulos_render/soporte" class="nav-link"><i class="bi bi-chat-dots me-2"></i>Soporte y Comunidad</a></li>
+        <li><a href="/miembros_modulos_render/soporte" class="nav-link"><i class="bi bi-chat-dots me-2"></i>Comunidad</a></li>
       {% elif rol_nombre == 'entrenador' %}
         <li><a href="/index_entrenador" class="nav-link"><i class="bi bi-house-door me-2"></i>Inicio</a></li>
         <li><a href="/entrenador_modulos_render/gestion_clases" class="nav-link"><i class="bi bi-calendar-event me-2"></i>Mis Clases</a></li>
@@ -49,6 +49,7 @@
       {% elif rol_nombre == 'administrador' %}
         <li><a href="/index_admin" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
         <li><a href="/admin_modulos_render/gestion_usuarios" class="nav-link"><i class="bi bi-people me-2"></i>Gestión de Usuarios</a></li>
+        <li><a href="/admin_modulos_render/gestion_clases_general" class="nav-link"><i class="bi bi-calendar-check me-2"></i>Gestión Clases General</a></li>
         <li><a href="/admin_modulos_render/analisis_reportes" class="nav-link"><i class="bi bi-bar-chart-line me-2"></i>Análisis | Reportes</a></li>
         <li><a href="/admin_modulos_render/gestion_publicidad" class="nav-link"><i class="bi bi-gear me-2"></i>Sistema de Publicidad</a></li>
       {% endif %}

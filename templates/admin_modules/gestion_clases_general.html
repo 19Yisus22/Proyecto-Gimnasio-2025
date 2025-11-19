@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestión Clases General | Administración</title>
+<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='uploads/icon.png') }}">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/styles_admin/style_gestion_clases_general.css') }}">
+</head>
+<body>
+
+{% include 'navbar.html' %}
+
+<div class="container-central">
+  <div class="card-title-center mb-4">Gestionar Clases General</div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5>Crear / Editar Clase</h5>
+      <div class="row g-2 mt-3">
+        <div class="col-md-3"><input type="text" id="nombreClase" class="form-control" placeholder="Nombre de la clase"></div>
+        <div class="col-md-3"><input type="text" id="descripcionClase" class="form-control" placeholder="Descripción"></div>
+        <div class="col-md-2">
+          <select id="tipoClase" class="form-select">
+            <option value="">Seleccionar Tipo</option>
+            <option value="yoga">Yoga</option>
+            <option value="crossfit">CrossFit</option>
+            <option value="spinning">Spinning</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <select id="nivelClase" class="form-select">
+            <option value="">Nivel</option>
+            <option value="principiante">Principiante</option>
+            <option value="intermedio">Intermedio</option>
+            <option value="avanzado">Avanzado</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <select id="instructorClase" class="form-select">
+            <option value="">Seleccionar Instructor</option>
+          </select>
+        </div>
+        <div class="col-md-2"><input type="number" id="capacidadClase" class="form-control" placeholder="Capacidad" min="1"></div>
+        <div class="col-md-2"><input type="time" id="horaInicioClase" class="form-control"></div>
+        <div class="col-md-2"><input type="time" id="horaFinClase" class="form-control"></div>
+        <div class="col-md-2"><input type="text" id="salaClase" class="form-control" placeholder="Sala"></div>
+        <div class="col-md-2"><input type="date" id="fechaClase" class="form-control"></div>
+        <div class="col-md-2">
+          <select id="estadoClase" class="form-select">
+            <option value="true">Activo</option>
+            <option value="false">Inactivo</option>
+          </select>
+        </div>
+        <input type="hidden" id="editIdClase" value="">
+        <div class="col-12 mt-3 text-center">
+          <button class="btn btn-success me-2" id="btnGuardar">Guardar Clase</button>
+          <button class="btn btn-secondary" id="btnCancelar" style="display:none;">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-3">
+    <div class="row g-2 mb-3">
+      <div class="col-md-4"><input type="text" id="buscarClaseGlobal" class="form-control" placeholder="Buscar por nombre, tipo o instructor" oninput="filtrarTabla()"></div>
+      <div class="col-md-4">
+        <select id="filtroTipo" class="form-select" onchange="filtrarTabla()">
+          <option value="">Filtrar Tipo</option>
+          <option value="yoga">Yoga</option>
+          <option value="crossfit">CrossFit</option>
+          <option value="spinning">Spinning</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <select id="filtroHorarioFranja" class="form-select" onchange="filtrarTabla()">
+          <option value="">Filtrar Franja</option>
+          <option value="Mañana">Mañana (06:00-11:59)</option>
+          <option value="Tarde">Tarde (12:00-16:59)</option>
+          <option value="Noche">Noche (17:00-22:00)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-bordered align-middle text-center">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Tipo</th>
+            <th>Nivel</th>
+            <th>Instructor</th>
+            <th>Horario</th>
+            <th>Capacidad</th>
+            <th>Sala</th>
+            <th>Estado</th>
+            <th>Fecha</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tablaClasesAdmin"></tbody>
+      </table>
+      <nav><ul id="paginacionClases" class="pagination justify-content-center"></ul></nav>
+    </div>
+  </div>
+</div>
+
+<div class="footer-space"></div>
+<div id="toastContainer" class="position-fixed p-3 top-0 end-0"></div>
+{% include 'footer.html' %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/funtions_admin/gestion_clases_general.js') }}"></script>
+
+</body>
+</html>

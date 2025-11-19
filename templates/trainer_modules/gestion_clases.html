@@ -23,13 +23,15 @@
 {% include 'navbar.html' %}
 <div class="container mt-4">
   <div class="card-title-center mb-4">Mis Clases</div>
-
   <div class="card mb-3">
     <div class="card-body">
       <h5>Seleccionar Miembro</h5>
       <select id="miembroSelect" class="form-control w-50" onchange="cargarDatosMiembro()">
         <option value="">Selecciona miembro</option>
       </select>
+      <div class="col-md-6">
+      <button class="btn btn-primary w-100" id="btnCargarDatos">Cargar Datos</button>
+      </div>
     </div>
   </div>
 
