@@ -1299,6 +1299,24 @@ def admin_marketing_get():
         "secciones": secciones
     })
 
+# FALTA POR TERMINAR
+
+@app.route("/index_recepcionista")
+def index_recepcionista():
+    return render_template("inicio.html", user=session.get("user"))
+
+@app.route("/recepcionista_modulos_render/<modulo>")
+def recepcionista_modulos_render(modulo):
+    return render_template(f"receptionist_modules/{modulo}.html", user=session.get("user"))
+
+@app.route("/index_nutricionista")
+def index_nutricionista():
+    return render_template("inicio.html", user=session.get("user"))
+
+@app.route("/nutricionista_modulos_render/<modulo>")
+def nutricionista_modulos_render(modulo):
+    return render_template(f"nutritionist_modules/{modulo}.html", user=session.get("user"))
+
 # APP RUN
 
 if __name__=="__main__":
