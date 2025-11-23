@@ -127,7 +127,7 @@ async function cancelarReserva(id_reserva){
     data.data.forEach(o=>{
       const tr = document.createElement("div");
       tr.className="d-flex justify-content-between align-items-center mb-2 p-2 border rounded bg-dark-purple text-black";
-      tr.innerHTML=`<span>${o.descripcion} (Limite: ${o.fecha_limite})</span>
+      tr.innerHTML=`<span style="color: black;">${o.descripcion} (Limite: ${o.fecha_limite})</span>
         <div>
           <button class="btn btn-sm btn-success me-1" onclick="marcarCumplido('${o.id_objetivo}')">${o.estado==='cumplido'?'✅':'Marcar Cumplido'}</button>
           <button class="btn btn-sm btn-danger" onclick="eliminarObjetivo('${o.id_objetivo}')">Eliminar</button>

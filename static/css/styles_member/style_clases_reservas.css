@@ -8,6 +8,19 @@ body {
     min-height:100vh;
     scroll-behavior: smooth;
 }
+#toastContainer { z-index:1055; }
+.progress { height:25px; margin-bottom:15px; border-radius: 8px; }
+.card-title-center {
+    width: 100%;
+    padding: 2rem 3rem;
+    background: #2c0d46;
+    border-radius: 25px;
+    box-shadow: 0 12px 35px rgba(0,0,0,0.6);
+    text-align: center;
+    font-size: 2rem;
+    font-weight: bold;
+    color: #fff;
+}
 .card {
     border:none;
     border-radius:15px;
@@ -15,11 +28,26 @@ body {
     background: rgba(47, 47, 47, 0.85);
     padding:2rem;
     transition: transform 0.4s ease, box-shadow 0.4s ease;
-    text-align:center;
     animation: slideIn 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
 }
 .card:hover {transform:translateY(-5px); box-shadow:0 12px 30px rgba(0,0,0,0.6);}
 @keyframes slideIn {0%{transform:translateY(-50px);opacity:0;}100%{transform:translateY(0);opacity:1;}}
+.star-rating .bi-star { cursor:pointer; color:gray; transition: color 0.2s; }
+.star-rating .bi-star-fill { color: gold; }
+.table-pagination { display:flex; justify-content:center; margin-top:10px; gap:5px; }
+.table-pagination button { min-width:35px; border-radius: 5px; }
+.btn { border-radius: 5px; }
+.main-content { padding: 1rem; flex-grow: 1; }
+.table thead th { background-color: #343a40; color: white; }
+.table {
+    --bs-table-bg: transparent; 
+    --bs-table-color: #fff;
+    --bs-table-striped-bg: rgba(255, 255, 255, 0.05);
+    --bs-table-hover-bg: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.table-bordered > :not(caption) > * { border-color: rgba(255, 255, 255, 0.2); }
+
 input.form-control, textarea.form-control, select.form-select {
     background: linear-gradient(135deg, #e0c3fc, #8ec5fc);
     color: #000;
@@ -62,31 +90,8 @@ button.btn-outline-light:hover {
     transition: width 0.8s ease-in-out;
     background: linear-gradient(135deg, #7f5af0, #d76cf8);
 }
-.chat-box {
-    height:350px;
-    overflow-y:auto;
-    background: rgba(255,255,255,0.05);
-    border-radius:12px;
-    padding:10px;
-    scroll-behavior:smooth;
-    display:flex;
-    flex-direction:column;
-    gap:5px;
-}
-.chat-message {margin-bottom:8px; opacity:0; animation: fadeIn 0.5s forwards;}
-.chat-message.user{text-align:left;}
-.chat-message.admin{text-align:right;}
-.bubble {
-    display:inline-block;
-    padding:10px 14px;
-    border-radius:20px;
-    max-width:70%;
-    transition: all 0.3s ease;
-}
-.bubble.user{background:#7f5af0; color:white; animation: bubblePop 0.4s ease;}
-.bubble.admin{background:rgba(255,255,255,0.2); color:#fff; animation: bubblePop 0.4s ease;}
-@keyframes bubblePop {0% {transform: scale(0.7); opacity:0;} 70% {transform: scale(1.05); opacity:1;} 100% {transform: scale(1);}}
-@keyframes fadeIn {0%{opacity:0;}100%{opacity:1;}}
 h1,h2,h3,h4,h5,h6,p,span,label,a {color:#fff; transition: color 0.3s ease;}
-.blog-intro {text-align:center; margin-bottom:1.5rem; color:#fff; background-color: rgba(28,28,28,0.8); padding:1rem; border-radius:12px; transition: all 0.3s ease;}
-input.form-control:disabled, textarea.form-control:disabled, select.form-select:disabled {color:#888; background-color: rgba(255,255,255,0.2);}
+.text-primary { color: #d76cf8 !important; }
+.bg-primary { background-color: #7f5af0 !important; }
+.btn-close-white { filter: invert(1) grayscale(100%) brightness(200%); }
+.text-muted { color: rgba(255, 255, 255, 0.7) !important; }

@@ -40,7 +40,6 @@ app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(24))
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'ico'}
-DATE_FORMAT = "%Y-%m-%d"
 
 # FUNCIONANDO COMPLETAMENTE
 
@@ -172,274 +171,8 @@ def logout():
     session.clear()
     return jsonify({"ok": True, "redirect": url_for("index")})
 
-# MODULOS MIEMBROS
 
-@app.route("/index_miembro")
-def index_miembro():
-    return render_template("inicio.html", user=session.get("user"))
-
-@app.route("/miembros_modulos_render/<modulo>")
-def miembros_modulos_render(modulo):
-    return render_template(f"member_modules/{modulo}.html", user=session.get("user"))
-
-# SECCION CLASES
-
-# FUNCIONES APARTADO CLASES / MODULO CLASES RESERVAS - MIEMBRO (ARREGLAR BOTON RESERVAS)
-
-@app.route("/api/miembros_entrenamientos", methods=["GET"])
-def miembros_entrenamientos_listar():
-    id_miembro = obtener_id_usuario()
-    if not id_miembro:
-        return jsonify({"ok": False, "message": "Usuario no autenticado"}), 401
-    data = supabase.table("m_entrenamientos_personales").select("*").eq("id_miembro", id_miembro).execute()
-    return jsonify({"ok": True, "data": data.data})
-
-@app.route("/api/miembros_entrenamientos", methods=["POST"])
-def miembros_entrenamientos_crear():
-    body = request.json
-    id_miembro = obtener_id_usuario()
-    if not id_miembro:
-        return jsonify({"ok": False, "message": "Usuario no autenticado"}), 401
-    nuevo = {
-        "id_miembro": id_miembro,
-        "id_entrenador": body.get("id_entrenador"),
-        "descripcion": body.get("descripcion"),
-        "duracion_semanas": body.get("duracion_semanas"),
-        "sesiones_semana": body.get("sesiones_semana"),
-        "nivel": body.get("nivel", "principiante")
-    }
-    resp = supabase.table("m_entrenamientos_personales").insert(nuevo).execute()
-    return jsonify({"ok": True, "data": resp.data})
-
-@app.route("/api/miembros_entrenamientos/<id_entrenamiento>", methods=["PUT"])
-def miembros_entrenamientos_actualizar(id_entrenamiento):
-    body = request.json
-    resp = supabase.table("m_entrenamientos_personales").update(body).eq("id_entrenamiento", id_entrenamiento).execute()
-    return jsonify({"ok": True, "data": resp.data})
-
-@app.route("/api/miembros_entrenamientos/<id_entrenamiento>", methods=["DELETE"])
-def miembros_entrenamientos_borrar(id_entrenamiento):
-    resp = supabase.table("m_entrenamientos_personales").delete().eq("id_entrenamiento", id_entrenamiento).execute()
-    return jsonify({"ok": True, "data": resp.data})
-
-# SECCION CLASES Y RESERVAS
-
-# FUNCIONES APARTADO RESERVAS / MODULO CLASES RESERVAS - MIEMBRO
-
-@app.route("/api/miembros/reservas", methods=["GET"])
-def miembros_reservas():
-    clases = supabase.table("a_gestion_clases").select("*").order("horario_inicio").execute()
-    clases_data = []
-    for c in clases.data:
-        nombre_instructor = "Sin asignar"
-        if c.get("instructor_id"):
-            instructor = supabase.table("usuarios").select("nombre,apellido").eq("id_usuario", c["instructor_id"]).maybe_single().execute()
-            if instructor.data:
-                nombre_instructor = f"{instructor.data['nombre']} {instructor.data['apellido']}"
-        reservas = supabase.table("m_reservas").select("*").eq("id_clase", c["id_clase"]).eq("estado", "reservada").execute()
-        ocupados = len(reservas.data if reservas.data else [])
-        total = c.get("capacidad_max", 0)
-        clases_data.append({
-            "id_clase": str(c["id_clase"]),
-            "tipo_clase": c["tipo_clase"],
-            "instructor": nombre_instructor,
-            "horario": f"{c['horario_inicio'][:-3]} - {c['horario_fin'][:-3]}",
-            "fecha": c.get("fecha"),
-            "capacidad_max": total,
-            "ocupados": ocupados,
-            "cupos_disponibles": f"{ocupados}/{total}"
-        })
-    return jsonify({"ok": True, "clases": clases_data})
-
-@app.route('/api/miembros/reservas_crear', methods=['POST'])
-def miembros_reservas_crear():
-    data = request.get_json()
-    id_miembro = data.get("id_miembro")
-    id_clase = data.get("id_clase")
-
-    if not id_miembro or not id_clase:
-        return jsonify({"error": "id_miembro y id_clase son obligatorios"}), 400
-
-    try:
-        existe_res = supabase.table("m_reservas").select("*").eq("id_miembro", id_miembro).eq("id_clase", id_clase).execute()
-    except Exception as e:
-        return jsonify({"error": "Error verificando reserva existente", "detalle": str(e)}), 500
-
-    if existe_res is None or getattr(existe_res, "data", None) is None:
-        return jsonify({"error": "Error inesperado consultando reservas"}), 500
-
-    if len(existe_res.data) > 0:
-        return jsonify({"error": "La reserva ya existe"}), 400
-
-    try:
-        nueva_res = supabase.table("m_reservas").insert({
-            "id_miembro": id_miembro,
-            "id_clase": id_clase
-        }).execute()
-    except Exception as e:
-        return jsonify({"error": "Error creando la reserva", "detalle": str(e)}), 500
-
-    if nueva_res is None or getattr(nueva_res, "data", None) is None:
-        return jsonify({"error": "Error inesperado creando reserva"}), 500
-
-    return jsonify({"mensaje": "Reserva creada exitosamente"}), 201
-
-@app.route("/api/miembros/mis_reservas", methods=["GET"])
-def miembros_mis_reservas():
-    id_miembro = obtener_id_usuario()
-    if not id_miembro:
-        return jsonify({"ok": False, "message": "Usuario no autenticado"}), 401
-    reservas = supabase.table("m_reservas").select("*").eq("id_miembro", id_miembro).execute()
-    clases_reservadas = []
-    for r in reservas.data:
-        clase = supabase.table("a_gestion_clases").select("*").eq("id_clase", r["id_clase"]).maybe_single().execute()
-        if not clase.data:
-            continue
-        c = clase.data
-        nombre_instructor = "Sin asignar"
-        if c.get("instructor_id"):
-            instructor = supabase.table("usuarios").select("nombre,apellido").eq("id_usuario", c["instructor_id"]).maybe_single().execute()
-            if instructor.data:
-                nombre_instructor = f"{instructor.data['nombre']} {instructor.data['apellido']}"
-        reservas_clase = supabase.table("m_reservas").select("*").eq("id_clase", c["id_clase"]).eq("estado", "reservada").execute()
-        ocupados = len(reservas_clase.data if reservas_clase.data else [])
-        total = c.get("capacidad_max", 0)
-        clases_reservadas.append({
-            "id_reserva": r["id_reserva"],
-            "id_clase": c["id_clase"],
-            "tipo_clase": c["tipo_clase"],
-            "instructor": nombre_instructor,
-            "horario": f"{c['horario_inicio'][:-3]} - {c['horario_fin'][:-3]}",
-            "estado": r.get("estado", "reservada"),
-            "cupos_disponibles": f"{ocupados}/{total}"
-        })
-    return jsonify({"ok": True, "clases": clases_reservadas})
-
-@app.route("/api/miembros/cancelar_reservas/<id_reserva>", methods=["PUT"])
-def miembros_reservas_cancelar(id_reserva):
-    resp = supabase.table("m_reservas").update({"estado": "cancelada"}).eq("id_reserva", id_reserva).execute()
-    return jsonify({"ok": True, "data": resp.data})
-
-@app.route("/api/miembros/completar_reservas/<id_reserva>", methods=["PUT"])
-def miembros_reservas_completar(id_reserva):
-    resp = supabase.table("m_reservas").update({"estado": "completada"}).eq("id_reserva", id_reserva).execute()
-    return jsonify({"ok": True, "data": resp.data})
-
-@app.route("/api/miembros/eliminar_reserva/<id_reserva>", methods=["DELETE"])
-def miembros_reservas_eliminar(id_reserva):
-    resp = supabase.table("m_reservas").delete().eq("id_reserva", id_reserva).execute()
-    return jsonify({"ok": True, "data": resp.data})
-
-# SECCION PROGRESO FISICO
-
-# FUNCIONES APARTADO RESERVAS / MODULO CLASES RESERVAS - MIEMBRO
-
-@app.route("/api/miembros_progreso", methods=["GET"])
-def miembros_progreso_listar():
-    data = supabase.table("m_progreso").select("*").execute()
-    return jsonify({"ok": True, "data": data.data})
-
-@app.route("/api/miembros_objetivos", methods=["GET"])
-def miembros_objetivos_listar():
-    id_usuario = obtener_id_usuario()
-    if not id_usuario:
-        return jsonify({"ok": False, "error":"Usuario no autenticado"}), 200  # Retorna 200 para que JS no rompa
-    data = supabase.table("m_objetivos").select("*").eq("id_miembro", id_usuario).execute()
-    return jsonify({"ok": True, "data": data.data})
-
-@app.route("/api/miembros_objetivos", methods=["POST"])
-def miembros_objetivos_crear():
-    id_usuario = obtener_id_usuario()
-    if not id_usuario:
-        return jsonify({"ok": False, "error":"Usuario no autenticado"}), 200
-    body = request.json
-    body["id_miembro"] = id_usuario
-    resp = supabase.table("m_objetivos").insert(body).execute()
-    return jsonify({"ok": True, "data": resp.data})
-
-@app.route("/api/miembros_objetivos/<id_objetivo>", methods=["PUT"])
-def miembros_objetivos_actualizar(id_objetivo):
-    id_usuario = obtener_id_usuario()
-    if not id_usuario:
-        return jsonify({"ok": False, "error":"Usuario no autenticado"}), 200
-    body = request.json
-    resp = supabase.table("m_objetivos").update(body).eq("id_objetivo", id_objetivo).eq("id_miembro", id_usuario).execute()
-    return jsonify({"ok": True, "data": resp.data})
-
-@app.route("/api/miembros_objetivos/<id_objetivo>", methods=["DELETE"])
-def miembros_objetivos_eliminar(id_objetivo):
-    id_usuario = session.get("user", {}).get("id_usuario")
-    if not id_usuario: return jsonify({"ok": False, "error":"Usuario no autenticado"}), 401
-    resp = supabase.table("m_objetivos").delete().eq("id_objetivo", id_objetivo).eq("id_miembro", id_usuario).execute()
-    return jsonify({"ok": True, "data": resp.data})
-
-
-
-# APP RUN
-
-if __name__=="__main__":
-    app.run(debug=True, port=3000)
-
-
-
-
-
-
-
-
-'''# INDEXS SIN CONFIGURAR
-
-# MODULO PERFIL - ARREGLAR
-
-@app.route("/index_perfil")
-def index_perfil():
-    return render_template("mi_perfil.html", user=session.get("user"))
-
-@app.route("/api/usuario/actualizar_completo", methods=["POST"])
-def actualizar_completo():
-    if "user_id" not in session:
-        return jsonify({"success": False, "message": "No autenticado"}), 401
-    data = request.form.to_dict()
-    update_fields = {
-        "nombre": data.get("nombrePerfil"),
-        "apellido": data.get("apellidoPerfil"),
-        "telefono": data.get("telefonoPerfil"),
-        "direccion": data.get("direccionPerfil"),
-        "metodo_pago": data.get("metodoPagoPerfil"),
-        "correo": data.get("correoPerfil")
-    }
-    if "imagen_url" in request.files and request.files["imagen_url"]:
-        file = request.files["imagen_url"]
-        if '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
-            filename = secure_filename(file.filename)
-            local_path = os.path.join(UPLOAD_DIR, filename)
-            file.save(local_path)
-            upload_result = cloudinary.uploader.upload(local_path, folder="usuarios")
-            url = upload_result.get("secure_url")
-            update_fields["imagen_url"] = url
-            os.remove(local_path)
-    result = supabase.table("usuarios").update(update_fields).eq("id_usuario", session["user_id"]).execute()
-    return jsonify({"success": result.status_code == 200})
-
-@app.route("/api/usuario/cambiar_contrasena", methods=["POST"])
-def cambiar_contrasena():
-    if "user_id" not in session:
-        return jsonify({"success": False, "message": "No autenticado"}), 401
-    data = request.get_json()
-    nueva = data.get("contrasena")
-    if not nueva:
-        return jsonify({"success": False, "message": "Contraseña vacía"}), 400
-    result = supabase.table("usuarios").update({"contrasena": nueva}).eq("id_usuario", session["user_id"]).execute()
-    return jsonify({"success": result.status_code == 200})
-
-
-@app.route("/index_recepcionista")
-def index_recepcionista():
-    return render_template("inicio.html", user=session.get("user"))
-
-@app.route("/recepcionista_modulos_render/<modulo>")
-def recepcionista_modulos_render(modulo):
-    return render_template(f"receptionist_modules/{modulo}.html", user=session.get("user"))
+# MODULO NUTRICIONISTA
 
 @app.route("/index_nutricionista")
 def index_nutricionista():
@@ -448,4 +181,337 @@ def index_nutricionista():
 @app.route("/nutricionista_modulos_render/<modulo>")
 def nutricionista_modulos_render(modulo):
     return render_template(f"nutritionist_modules/{modulo}.html", user=session.get("user"))
-'''
+
+# SECCION GESTION USUARIOS
+
+# FUNCIONES APARTADO GESTION USUARIOS / MODULO GESTION USUARIOS - NUTRICIONISTA
+
+@app.route("/api/nutricionista/perfil/buscar", methods=["GET"])
+def nutricionista_buscar_miembro():
+    q = request.args.get("q", "")
+    res = supabase.table("usuarios").select("*").ilike("nombre", f"%{q}%").execute()
+    items = [{"id": u["id_usuario"], "name": u["nombre"], "email": u["correo"]} for u in res.data]
+    return jsonify({"items": items})
+
+@app.route("/api/nutricionista/perfil/get/<member_id>", methods=["GET"])
+def nutricionista_obtener_perfil(member_id):
+    usuario_resp = supabase.table("usuarios").select("*").eq("id_usuario", member_id).single().execute()
+    usuario = usuario_resp.data
+    if not usuario:
+        return jsonify({"error": "Miembro no encontrado"}), 404
+
+    progreso_resp = supabase.table("n_progreso_miembro").select("*").eq("id_miembro", member_id).order("fecha", desc=True).execute()
+    progreso = progreso_resp.data if progreso_resp.data else []
+
+    objetivos_resp = supabase.table("m_objetivos").select("*").eq("id_miembro", member_id).order("fecha_limite").execute()
+    objetivos = objetivos_resp.data if objetivos_resp.data else []
+
+    estado_salud_resp = supabase.table("m_estado_salud").select("*").eq("id_miembro", member_id).order("fecha", desc=True).execute()
+    estados_salud = estado_salud_resp.data if estado_salud_resp.data else []
+
+    historial = {
+        "fechas": [p["fecha"] for p in progreso],
+        "peso": [float(p["peso"]) if p["peso"] is not None else None for p in progreso],
+        "grasa": [float(p["grasa_corporal"]) if p["grasa_corporal"] is not None else None for p in progreso],
+        "masa_muscular": [float(p["masa_muscular"]) if p["masa_muscular"] is not None else None for p in progreso]
+    }
+
+    last_update = progreso[0]["fecha"] if progreso else None
+
+    return jsonify({
+        "usuario": {
+            "nombre": usuario.get("nombre", ""),
+            "apellido": usuario.get("apellido", ""),
+            "genero": usuario.get("genero", ""),
+            "telefono": usuario.get("telefono", ""),
+            "direccion": usuario.get("direccion", ""),
+            "cedula": usuario.get("cedula", ""),
+            "fecha_nacimiento": usuario.get("fecha_nacimiento", ""),
+            "correo": usuario.get("correo", ""),
+            "avatar": usuario.get("imagen_url", ""),
+            "estado": "Activo"
+        },
+        "objetivos": objetivos,
+        "estados_salud": estados_salud,
+        "progreso": progreso,
+        "historial": historial,
+        "last_update": last_update
+    })
+
+@app.route("/api/nutricionista/progreso/registrar", methods=["POST"])
+def nutricionista_registrar_progreso():
+    data = request.json
+    insert_data = {
+        "id_miembro": data["id_miembro"],
+        "peso": data.get("peso"),
+        "grasa_corporal": data.get("grasa_corporal"),
+        "masa_muscular": data.get("masa_muscular"),
+        "observaciones": data.get("observaciones")
+    }
+    res = supabase.table("n_progreso_miembro").insert(insert_data).execute()
+    return jsonify(res.data)
+
+# SECCION PLAN NUTRICIONAL
+
+# FUNCIONES APARTADO EVALUACION INICIAL / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
+
+@app.route("/api/nutricionista/n_evaluacion_inicial", methods=["POST"])
+def n_evaluacion_inicial_crear():
+    data = request.json
+    insert_data = {
+        "id_miembro": data.get("id_miembro"),
+        "nombre": data.get("nombre"),
+        "edad": data.get("edad"),
+        "sexo": data.get("sexo"),
+        "peso": data.get("peso"),
+        "altura": data.get("altura"),
+        "actividad": data.get("actividad"),
+        "restricciones": data.get("restricciones")
+    }
+    res = supabase.table("n_evaluacion_inicial").insert(insert_data).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_evaluacion_inicial/<id_miembro>", methods=["GET"])
+def n_evaluacion_inicial_obtener(id_miembro):
+    res = supabase.table("n_evaluacion_inicial").select("*").eq("id_miembro", id_miembro).execute()
+    return jsonify(res.data)
+
+# SECCION PLAN NUTRICIONAL
+
+# FUNCIONES APARTADO CREAR PLAN / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
+
+@app.route("/api/nutricionista/n_planes_nutricion", methods=["POST"])
+def n_planes_nutricion_crear():
+    data = request.json
+    insert_data = {
+        "id_miembro": data.get("id_miembro"),
+        "id_nutricionista": data.get("id_nutricionista"),
+        "descripcion": data.get("descripcion"),
+        "calorias": data.get("calorias"),
+        "proteina": data.get("proteina"),
+        "grasa": data.get("grasa"),
+        "carbohidratos": data.get("carbohidratos"),
+        "plantilla": data.get("plantilla"),
+        "fecha_inicio": data.get("fecha_inicio"),
+        "fecha_fin": data.get("fecha_fin"),
+        "feedback": data.get("feedback", ""),
+        "recomendaciones": data.get("recomendaciones", "")
+    }
+    res = supabase.table("n_planes_nutricion").insert(insert_data).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_planes_nutricion/miembro/<id_miembro>", methods=["GET"])
+def n_planes_nutricion_por_miembro(id_miembro):
+    res = supabase.table("n_planes_nutricion").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=True).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_planes_nutricion", methods=["GET"])
+def n_planes_nutricion_todos():
+    res = supabase.table("n_planes_nutricion").select("*").order("fecha_creacion", desc=True).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_planes_nutricion/<id_plan>", methods=["PUT"])
+def n_planes_nutricion_actualizar(id_plan):
+    data = request.json
+    update_data = {
+        "descripcion": data.get("descripcion"),
+        "calorias": data.get("calorias"),
+        "proteina": data.get("proteina"),
+        "grasa": data.get("grasa"),
+        "carbohidratos": data.get("carbohidratos"),
+        "plantilla": data.get("plantilla"),
+        "fecha_inicio": data.get("fecha_inicio"),
+        "fecha_fin": data.get("fecha_fin"),
+        "feedback": data.get("feedback"),
+        "recomendaciones": data.get("recomendaciones")
+    }
+    clean = {k: v for k, v in update_data.items() if v is not None}
+    res = supabase.table("n_planes_nutricion").update(clean).eq("id_plan", id_plan).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_planes_nutricion/<id_plan>", methods=["DELETE"])
+def n_planes_nutricion_eliminar(id_plan):
+    res = supabase.table("n_planes_nutricion").delete().eq("id_plan", id_plan).execute()
+    return jsonify(res.data)
+
+# SECCION PLAN NUTRICIONAL
+
+# FUNCIONES APARTADO RESGISTRAR PROGRESO / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
+
+@app.route("/api/nutricionista/n_sesiones_progreso", methods=["POST"])
+def n_sesiones_progreso_crear():
+    data = request.json
+    insert_data = {
+        "id_plan": data.get("id_plan"),
+        "id_miembro": data.get("id_miembro"),
+        "fecha": data.get("fecha"),
+        "hora": data.get("hora"),
+        "peso": data.get("peso"),
+        "grasa_corporal": data.get("grasa_corporal"),
+        "masa_muscular": data.get("masa_muscular"),
+        "seguimiento_dieta": data.get("seguimiento_dieta"),
+        "observaciones": data.get("observaciones"),
+        "notas": data.get("notas"),
+        "estado": data.get("estado", "programada")
+    }
+    res = supabase.table("n_sesiones_progreso").insert(insert_data).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_sesiones_progreso/miembro/<id_miembro>", methods=["GET"])
+def n_sesiones_progreso_por_miembro(id_miembro):
+    res = supabase.table("n_sesiones_progreso").select("*").eq("id_miembro", id_miembro).order("fecha", desc=True).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_sesiones_progreso", methods=["GET"])
+def n_sesiones_progreso_todos():
+    res = supabase.table("n_sesiones_progreso").select("*").order("fecha", desc=True).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_sesiones_progreso/<id_sesion>", methods=["PUT"])
+def n_sesiones_progreso_actualizar(id_sesion):
+    data = request.json
+    update_data = {
+        "fecha": data.get("fecha"),
+        "hora": data.get("hora"),
+        "peso": data.get("peso"),
+        "grasa_corporal": data.get("grasa_corporal"),
+        "masa_muscular": data.get("masa_muscular"),
+        "seguimiento_dieta": data.get("seguimiento_dieta"),
+        "observaciones": data.get("observaciones"),
+        "notas": data.get("notas"),
+        "estado": data.get("estado")
+    }
+    clean = {k: v for k, v in update_data.items() if v is not None}
+    res = supabase.table("n_sesiones_progreso").update(clean).eq("id_sesion", id_sesion).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_sesiones_progreso/<id_sesion>", methods=["DELETE"])
+def n_sesiones_progreso_eliminar(id_sesion):
+    res = supabase.table("n_sesiones_progreso").delete().eq("id_sesion", id_sesion).execute()
+    return jsonify(res.data)
+
+# SECCION PLAN NUTRICIONAL
+
+# FUNCIONES APARTADO CHAT/FEEDBACK / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
+
+@app.route("/api/nutricionista/n_chat_nutricion", methods=["POST"])
+def n_chat_nutricion_crear():
+    try:
+        data = request.json
+        insert_data = {
+            "id_miembro": data.get("id_miembro"),
+            "id_nutricionista": data.get("id_nutricionista"),
+            "mensaje": data.get("mensaje"),
+            "remitente": data.get("remitente")
+        }
+        res = supabase.table("n_chat_nutricion").insert(insert_data).execute()
+        return jsonify(res.data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/nutricionista/n_chat_nutricion/miembro/<id_miembro>", methods=["GET"])
+def n_chat_por_miembro(id_miembro):
+    try:
+        res = supabase.table("n_chat_nutricion").select("*").eq("id_miembro", id_miembro).order("fecha_hora", desc=False).execute()
+        return jsonify(res.data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# SECCION PLAN NUTRICIONAL
+
+# FUNCIONES APARTADO CREAR INGESTA / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
+    
+@app.route("/api/nutricionista/n_ingesta", methods=["POST"])
+def n_ingesta_crear():
+    data = request.json
+    insert_data = {
+        "id_miembro": data.get("id_miembro"),
+        "id_plan": data.get("id_plan"),
+        "fecha": data.get("fecha"),
+        "alimento": data.get("alimento"),
+        "cantidad": data.get("cantidad"),
+        "calorias": data.get("calorias"),
+        "proteina": data.get("proteina"),
+        "grasa": data.get("grasa"),
+        "carbohidratos": data.get("carbohidratos")
+    }
+    res = supabase.table("n_ingesta").insert(insert_data).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_ingesta/miembro/<id_miembro>", methods=["GET"])
+def n_ingesta_por_miembro(id_miembro):
+    res = supabase.table("n_ingesta").select("*").eq("id_miembro", id_miembro).order("fecha", desc=True).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_ingesta/<id_ingesta>", methods=["DELETE"])
+def n_ingesta_eliminar(id_ingesta):
+    res = supabase.table("n_ingesta").delete().eq("id_ingesta", id_ingesta).execute()
+    return jsonify(res.data)
+
+# SECCION PLAN NUTRICIONAL
+
+# FUNCIONES APARTADO CREAR PROGRESO / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
+
+@app.route("/api/nutricionista/progreso/registrar", methods=["POST"])
+def n_progreso_registrar():
+    data = request.json
+    insert_data = {
+        "id_miembro": data.get("id_miembro"),
+        "fecha": data.get("fecha"),
+        "peso": data.get("peso"),
+        "grasa_corporal": data.get("grasa_corporal"),
+        "masa_muscular": data.get("masa_muscular"),
+        "seguimiento_dieta": data.get("seguimiento_dieta"),
+        "observaciones": data.get("observaciones")
+    }
+    res = supabase.table("n_progreso_miembro").insert(insert_data).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/progreso/listar/<id_miembro>", methods=["GET"])
+def n_progreso_listar(id_miembro):
+    res = supabase.table("n_progreso_miembro").select("*").eq("id_miembro", id_miembro).order("fecha", desc=True).execute()
+    return jsonify(res.data)
+
+
+
+
+
+
+
+@app.route("/api/nutricionista/documentos", methods=["POST"])
+def n_documentos_crear():
+    data = request.json
+    insert_data = {
+        "id_miembro": data.get("id_miembro"),
+        "nombre": data.get("nombre"),
+        "url": data.get("url")
+    }
+    res = supabase.table("n_documentos_medicos").insert(insert_data).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/documentos/miembro/<id_miembro>", methods=["GET"])
+def n_documentos_por_miembro(id_miembro):
+    res = supabase.table("n_documentos_medicos").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=True).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/documentos/<id_imagen>", methods=["DELETE"])
+def n_documentos_eliminar(id_imagen):
+    res = supabase.table("n_documentos_medicos").delete().eq("id_imagen", id_imagen).execute()
+    return jsonify(res.data)
+
+
+
+
+
+
+
+
+
+
+
+
+
+# APP RUN
+
+if __name__=="__main__":
+    app.run(debug=True, port=3000)

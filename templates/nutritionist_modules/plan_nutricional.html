@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nutrición & Progreso | Nutricionista</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles_nutritionist/style_plan_nutricional.css') }}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+</head>
+
+<body data-user-id="{{ user.id_usuario if user else '' }}">
+  {% include 'navbar.html' %}
+
+  <main class="container mt-4 mb-5">
+    <div class="card-title-center mb-4">Nutrición, Evaluación y Planes Personalizados</div>
+
+    <div class="card p-3 mb-4">
+      <h5 style="color: black;" class="mb-3">Seleccionar Miembro</h5>
+      <div class="input-group mb-3">
+        <input type="text" id="searchMemberInput" class="form-control" placeholder="Buscar por nombre...">
+        <button class="btn btn-outline-secondary" type="button" id="btnSearchMember">Buscar</button>
+      </div>
+      <div id="searchResults" class="list-group"></div>
+      <div id="selectedMemberInfo" class="alert alert-info d-none mt-2">
+        <strong>Miembro seleccionado:</strong> <span id="selectedMemberName" style="color: black;"></span>
+        <button class="btn btn-sm btn-outline-danger ms-2" id="btnClearSelection">Cambiar</button>
+      </div>
+    </div>
+
+    <div id="mainContent" class="row g-4 d-none">
+      <div class="col-lg-4">
+        <div class="card p-3 mb-4">
+          <h5 style="color: black;" class="mb-3">Evaluación Inicial</h5>
+          <form id="formEval">
+            <p>Nombre Completo:</p>
+            <div class="mb-2"><input id="eval_nombre" class="form-control" placeholder="Nombre" required></div>
+            <p>Edad:</p>
+            <div class="mb-2"><input id="eval_edad" type="number" class="form-control" placeholder="Edad" required></div>
+            <p>Sexo:</p>
+            <div class="mb-2"><input id="eval_sexo" class="form-control" placeholder="Sexo (M/F)" required></div>
+            <p>Peso (kg):</p>
+            <div class="mb-2"><input id="eval_peso" type="number" step="0.1" class="form-control" placeholder="Peso (kg)" required></div>
+            <p>Altura (cm):</p>
+            <div class="mb-2"><input id="eval_altura" type="number" step="0.1" class="form-control" placeholder="Altura (cm)" required></div>
+            <p>Nivel de actividad:</p>
+            <div class="mb-2"><input id="eval_actividad" class="form-control" placeholder="Nivel actividad" required></div>
+            <p>Restricciones:</p>
+            <div class="mb-2"><input id="eval_restricciones" class="form-control" placeholder="Restricciones / Alergias"></div>
+            <div class="d-grid"><button type="submit" class="btn btn-primary">Guardar Evaluación</button></div>
+            <div id="evalResultados" class="mt-3"></div>
+          </form>
+        </div>
+
+        <div class="card p-3 mb-4">
+          <h5 style="color: black;" class="mb-3">Crear Plan Nutricional</h5>
+          <form id="formPlan">
+            <div class="mb-2"><input id="plan_titulo" class="form-control" placeholder="Título del plan" required></div>
+            <div class="mb-2"><input id="plan_calorias" type="number" class="form-control" placeholder="Calorías diarias" required></div>
+            <div class="mb-2 d-flex gap-2">
+              <input id="macro_prot" type="number" class="form-control" placeholder="Proteína (%)" required>
+              <input id="macro_grasa" type="number" class="form-control" placeholder="Grasa (%)" required>
+              <input id="macro_carbs" type="number" class="form-control" placeholder="Carbs (%)" required>
+            </div>
+            <div class="mb-2">
+              <select id="plan_template" class="form-select">
+                <option value="plantilla_estandar">Plantilla estándar</option>
+                <option value="plantilla_hipercalorica">Hipercalórica</option>
+                <option value="plantilla_deficit">Déficit calórico</option>
+              </select>
+            </div>
+            <div class="mb-2"><input id="plan_inicio" type="date" class="form-control" required></div>
+            <div class="mb-2"><input id="plan_fin" type="date" class="form-control" required></div>
+            <div class="d-grid"><button type="submit" class="btn btn-success">Crear Plan</button></div>
+          </form>
+        </div>
+
+        <div class="card p-3">
+          <h5 style="color: black;" class="mb-3">Chat / Feedback de parte del nutricionista</h5>
+          <div id="chatNutri"></div>
+          <div class="input-group mt-2">
+            <input id="mensajeNutri" class="form-control" placeholder="Escribe tu mensaje..." onkeypress="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btnEnviarNutri').click(); }">
+            <button id="btnEnviarNutri" class="btn btn-primary"><i class="bi bi-send-fill"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div class="card p-3 mb-4">
+          <h5 style="color: black;" class="mb-3">Planes Nutricionales Asignados</h5>
+          <div id="planesAsignados">
+            <p class="text-muted">No hay planes asignados aún.</p>
+          </div>
+          <div id="planesPagination" class="pagination-controls d-none"></div>
+        </div>
+
+        <div class="card p-3 mb-4">
+          <h5 style="color: black;" class="mb-3">Registro de Ingesta</h5>
+          <form id="formIngesta">
+            <div class="row g-2 mb-2">
+              <div class="col-md-4"><input id="ingesta_fecha" type="date" class="form-control" required></div>
+              <div class="col-md-4"><input id="ingesta_alimento" class="form-control" placeholder="Alimento" required></div>
+              <div class="col-md-4"><input id="ingesta_cantidad" type="number" step="0.01" class="form-control" placeholder="Cantidad (g)" required></div>
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-md-3"><input id="ingesta_calorias" type="number" step="0.01" class="form-control" placeholder="Kcal"></div>
+              <div class="col-md-3"><input id="ingesta_prot" type="number" step="0.01" class="form-control" placeholder="Proteína (g)"></div>
+              <div class="col-md-3"><input id="ingesta_grasa" type="number" step="0.01" class="form-control" placeholder="Grasa (g)"></div>
+              <div class="col-md-3"><input id="ingesta_carbs" type="number" step="0.01" class="form-control" placeholder="Carbos (g)"></div>
+            </div>
+            <div class="d-grid"><button type="submit" class="btn btn-primary btn-sm">Registrar Ingesta</button></div>
+          </form>
+          <div id="listaIngesta" class="mt-3">
+            <p class="text-muted">No hay registros de ingesta.</p>
+          </div>
+          <div id="ingestaPagination" class="pagination-controls d-none"></div>
+        </div>
+
+        <div class="card p-3 mb-4">
+          <h5 style="color: black;" class="mb-3">Registrar Progreso</h5>
+          <form id="formProgreso">
+            <div class="row g-2 mb-2">
+              <div class="col-md-3"><input id="progreso_fecha" type="date" class="form-control" required></div>
+              <div class="col-md-3"><input id="progreso_peso" type="number" step="0.01" class="form-control" placeholder="Peso (kg)" required></div>
+              <div class="col-md-3"><input id="progreso_grasa" type="number" step="0.01" class="form-control" placeholder="Grasa corporal (%)"></div>
+              <div class="col-md-3"><input id="progreso_musculo" type="number" step="0.01" class="form-control" placeholder="Masa muscular (kg)"></div>
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-md-6">
+                <textarea id="progreso_seguimiento" class="form-control" rows="2" placeholder="Seguimiento de dieta"></textarea>
+              </div>
+              <div class="col-md-6">
+                <textarea id="progreso_observaciones" class="form-control" rows="2" placeholder="Observaciones"></textarea>
+              </div>
+            </div>
+            <div class="d-grid"><button type="submit" class="btn btn-primary">Registrar Progreso</button></div>
+          </form>
+          <div id="listaProgreso" class="mt-3">
+            <p class="text-muted">No hay registros de progreso.</p>
+          </div>
+          <div id="progresoPagination" class="pagination-controls d-none"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="modalContainer"></div>
+  <div id="toastContainer" class="position-fixed p-3 top-0 end-0"></div>
+  {% include 'footer.html' %}
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='js/funtions_nutritionist/plan_nutricional.js') }}"></script>
+</body>
+
+</html>

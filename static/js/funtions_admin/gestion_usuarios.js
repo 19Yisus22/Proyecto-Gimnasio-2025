@@ -19,9 +19,18 @@ function mostrarToast(mensaje, tipo='success') {
 }
 
 async function listarUsuarios() {
-  const response = await fetch(`/usuarios/listar`);
-  usuariosGlobal = await response.json();
-  filtrarTabla();
+  try {
+    const response = await fetch(`/usuarios/listar`);
+    if (!response.ok) {
+        throw new Error(`Respuesta no exitosa: ${response.statusText}`);
+    }
+    usuariosGlobal = await response.json();
+    filtrarTabla();
+    // No se muestra toast de éxito aquí para evitar spam al cargar la página
+  } catch (error) {
+    console.error('Error al obtener la lista de usuarios:', error);
+    mostrarToast('Error al cargar usuarios', 'danger');
+  }
 }
 
 async function guardarUsuario() {
@@ -29,7 +38,8 @@ async function guardarUsuario() {
   const apellido = document.getElementById('apellidoUsuario').value.trim();
   const cedula = document.getElementById('cedulaUsuario').value.trim();
   const correo = document.getElementById('correoUsuario').value.trim();
-  const contrasena = document.getElementById('contrasenaUsuario').value.trim();
+  const contrasenaInput = document.getElementById('contrasenaUsuario');
+  const contrasena = contrasenaInput.value.trim();
   const rol = document.getElementById('rolUsuario').value;
   const telefono = document.getElementById('telefonoUsuario').value.trim();
   const direccion = document.getElementById('direccionUsuario').value.trim();
@@ -38,32 +48,62 @@ async function guardarUsuario() {
   const metodoPago = document.getElementById('metodoPagoUsuario').value;
   const membresiaActiva = document.getElementById('membresiaUsuario').value === 'true';
 
-  if(!nombre || !apellido || !cedula || !correo || !rol || !contrasena) {
-    mostrarToast('Todos los campos obligatorios', 'danger');
+  if(!nombre || !apellido || !cedula || !correo || !rol || (!editandoId && !contrasena)) {
+    mostrarToast('Todos los campos obligatorios deben estar llenos, incluyendo Contraseña para nuevos registros.', 'danger');
     return;
   }
 
-  const usuario = { nombre, apellido, cedula, correo, contrasena, rol, telefono, direccion, genero, fecha_nacimiento: fechaNacimiento, metodo_pago: metodoPago, membresia_activa: membresiaActiva, imagen_url: '/static/uploads/default_icon_profile.png' };
+  const usuario = {
+    nombre, apellido, cedula, correo, rol,
+    telefono, direccion, genero,
+    fecha_nacimiento: fechaNacimiento,
+    metodo_pago: metodoPago,
+    membresia_activa: membresiaActiva,
+    imagen_url: '/static/uploads/default_icon_profile.png'
+  };
 
-  if(editandoId) {
-    await fetch(`/usuarios/editar/${editandoId}`, {
-      method: 'PUT',
+  if (!editandoId) {
+    usuario.contrasena = contrasena;
+  }
+  
+  try {
+    let url = '';
+    let method = '';
+    let mensaje = '';
+
+    if(editandoId) {
+      url = `/usuarios/editar/${editandoId}`;
+      method = 'PUT';
+      mensaje = 'Usuario actualizado correctamente';
+    } else {
+      url = '/usuarios/crear';
+      method = 'POST';
+      mensaje = 'Usuario creado correctamente';
+    }
+
+    const response = await fetch(url, {
+      method: method,
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(usuario)
     });
+    
+    // VERIFICACIÓN CLAVE: Solo si la respuesta HTTP es exitosa (código 200-299)
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Error desconocido en el servidor.' }));
+        throw new Error(`Error en la solicitud: ${errorData.message || response.statusText}`);
+    }
+
+    limpiarFormulario();
+    mostrarToast(mensaje);
+    listarUsuarios();
+
+  } catch (error) {
+    console.error('Error al guardar usuario:', error);
+    mostrarToast(`Error al guardar usuario: ${error.message}`, 'danger');
+  } finally {
     editandoId = null;
     document.getElementById('btnCancelar').style.display = 'none';
-  } else {
-    await fetch('/usuarios/crear', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(usuario)
-    });
   }
-
-  limpiarFormulario();
-  mostrarToast('Usuario guardado correctamente');
-  listarUsuarios();
 }
 
 function limpiarFormulario() {
@@ -72,6 +112,7 @@ function limpiarFormulario() {
   document.getElementById('cedulaUsuario').value = '';
   document.getElementById('correoUsuario').value = '';
   document.getElementById('contrasenaUsuario').value = '';
+  document.getElementById('contrasenaUsuario').disabled = false;
   document.getElementById('telefonoUsuario').value = '';
   document.getElementById('direccionUsuario').value = '';
   document.getElementById('generoUsuario').value = '';
@@ -96,49 +137,35 @@ function formatearFecha(fechaISO) {
   return `${dia}/${mes}/${anio}`;
 }
 
-function verPerfil(id_usuario) {
-  fetch(`/usuarios/obtener/${id_usuario}`)
-    .then(res => res.json())
-    .then(u => {
-      const nombreRol = u.roles ? u.roles.nombre_rol : 'N/A';
-      let contenido = `<ul class="list-group">
-        <li class="list-group-item"><b>Nombre:</b> ${u.nombre}</li>
-        <li class="list-group-item"><b>Apellido:</b> ${u.apellido}</li>
-        <li class="list-group-item"><b>Cédula:</b> ${u.cedula}</li>
-        <li class="list-group-item"><b>Correo:</b> ${u.correo}</li>
-        <li class="list-group-item"><b>Rol:</b> ${nombreRol}</li>
-        <li class="list-group-item"><b>Teléfono:</b> ${u.telefono || '-'}</li>
-        <li class="list-group-item"><b>Dirección:</b> ${u.direccion || '-'}</li>
-        <li class="list-group-item"><b>Género:</b> ${u.genero || '-'}</li>
-        <li class="list-group-item"><b>Método de Pago:</b> ${u.metodo_pago || '-'}</li>
-        ${['miembro','entrenador'].includes(nombreRol) ? `<li class="list-group-item"><b>Membresía Activa:</b> ${u.membresia_activa ? 'Sí' : 'No'}</li>` : ''}
-        <li class="list-group-item"><b>Fecha Nacimiento:</b> ${u.fecha_nacimiento || '-'}</li>
-        <li class="list-group-item"><b>Fecha Creación:</b> ${formatearFecha(u.fecha_creacion)}</li>
-      </ul>`;
-      document.getElementById('perfilContenido').innerHTML = contenido;
-      const modal = new bootstrap.Modal(document.getElementById('perfilModal'));
-      modal.show();
-    });
-}
-
 function editarUsuario(id_usuario) {
   fetch(`/usuarios/obtener/${id_usuario}`)
-    .then(res => res.json())
+    .then(res => {
+        if (!res.ok) throw new Error('Error al obtener usuario');
+        return res.json();
+    })
     .then(u => {
       document.getElementById('nombreUsuario').value = u.nombre;
       document.getElementById('apellidoUsuario').value = u.apellido;
       document.getElementById('cedulaUsuario').value = u.cedula;
       document.getElementById('correoUsuario').value = u.correo;
+      
       document.getElementById('contrasenaUsuario').value = '';
+      document.getElementById('contrasenaUsuario').disabled = true;
+      
       document.getElementById('telefonoUsuario').value = u.telefono || '';
       document.getElementById('direccionUsuario').value = u.direccion || '';
       document.getElementById('generoUsuario').value = u.genero || '';
-      document.getElementById('fechaNacimientoUsuario').value = u.fecha_nacimiento || '';
+      document.getElementById('fechaNacimientoUsuario').value = u.fecha_nacimiento ? u.fecha_nacimiento.substring(0, 10) : ''; 
       document.getElementById('metodoPagoUsuario').value = u.metodo_pago || 'Efectivo';
-      document.getElementById('rolUsuario').value = u.rol;
+      document.getElementById('rolUsuario').value = u.rol || '';
+      
       document.getElementById('membresiaUsuario').value = u.membresia_activa ? 'true' : 'false';
       editandoId = id_usuario;
       document.getElementById('btnCancelar').style.display = 'inline-block';
+    })
+    .catch(error => {
+        console.error('Error al cargar datos para edición:', error);
+        mostrarToast('Error al cargar datos del usuario para editar', 'danger');
     });
 }
 
@@ -148,9 +175,15 @@ function eliminarUsuario(correo) {
       method:'DELETE',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({correo})
+    }).then(res => {
+        if (!res.ok) throw new Error('Error al eliminar');
+        return res;
     }).then(()=> {
       mostrarToast('Usuario eliminado', 'warning');
       listarUsuarios();
+    }).catch(error => {
+        console.error('Error al eliminar usuario:', error);
+        mostrarToast('Error al eliminar usuario', 'danger');
     });
   }
 }
@@ -160,11 +193,14 @@ function filtrarTabla() {
   const membresiaFiltro = document.getElementById('filtroMembresia').value;
   const rolFiltro = document.getElementById('filtroRol').value;
   usuariosFiltrados = usuariosGlobal.filter(u => {
-    const rolNombre = u.roles ? u.roles.nombre_rol : '';
+    const rolEnPropiedad = u.rol || '';
+    const rolEnRelacion = u.roles ? u.roles.nombre_rol : rolEnPropiedad;
+    const rolNombre = rolEnRelacion; 
+    
     const coincideCedula = u.cedula.toLowerCase().includes(cedulaFiltro);
-    const mostrarMembresia = ['miembro','entrenador'].includes(rolNombre);
+    const mostrarMembresia = ['miembro','entrenador'].includes(rolNombre.toLowerCase());
     const coincideMembresia = membresiaFiltro === '' || !mostrarMembresia || String(u.membresia_activa) === membresiaFiltro;
-    const coincideRol = rolFiltro === '' || rolNombre === rolFiltro;
+    const coincideRol = rolFiltro === '' || rolNombre.toLowerCase() === rolFiltro.toLowerCase();
     return coincideCedula && coincideMembresia && coincideRol;
   });
   paginaActual = 1;
@@ -179,8 +215,12 @@ function renderizarTabla(usuarios) {
   const fin = inicio + filasPorPagina;
   const paginaUsuarios = usuarios.slice(inicio, fin);
   paginaUsuarios.forEach(u => {
-    const nombreRol = u.roles ? u.roles.nombre_rol : 'N/A';
-    const mostrarMembresia = ['miembro','entrenador'].includes(nombreRol);
+    const rolEnPropiedad = u.rol || 'N/A';
+    const rolEnRelacion = u.roles ? u.roles.nombre_rol : rolEnPropiedad;
+    const nombreRol = rolEnRelacion; 
+    
+    const mostrarMembresia = ['miembro','entrenador'].includes(nombreRol.toLowerCase());
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${u.nombre}</td>
@@ -193,12 +233,13 @@ function renderizarTabla(usuarios) {
       <td>${u.genero || '-'}</td>
       <td>${u.metodo_pago || '-'}</td>
       <td>${mostrarMembresia ? (u.membresia_activa ? 'Sí' : 'No') : '-'}</td>
-      <td>${u.fecha_nacimiento || '-'}</td>
+      <td>${formatearFecha(u.fecha_nacimiento)}</td>
       <td>${formatearFecha(u.fecha_creacion)}</td>
       <td>
-        <button class="btn btn-sm btn-info me-1" onclick="verPerfil('${u.id_usuario}')"><i class="bi bi-eye-fill"></i></button>
-        <button class="btn btn-sm btn-primary me-1" onclick="editarUsuario('${u.id_usuario}')"><i class="bi bi-pencil-fill"></i></button>
-        <button class="btn btn-sm btn-danger" onclick="eliminarUsuario('${u.correo}')"><i class="bi bi-trash-fill"></i></button>
+        <div class="d-flex justify-content-start">
+            <button class="btn btn-sm btn-primary me-1" onclick="editarUsuario('${u.id_usuario}')"><i class="bi bi-pencil-fill"></i></button>
+            <button class="btn btn-sm btn-danger" onclick="eliminarUsuario('${u.correo}')"><i class="bi bi-trash-fill"></i></button>
+        </div>
       </td>`;
     tbody.appendChild(tr);
   });
@@ -208,6 +249,8 @@ function renderizarPaginacion() {
   const totalPaginas = Math.ceil(usuariosFiltrados.length / filasPorPagina);
   const pagContainer = document.getElementById('paginacion');
   pagContainer.innerHTML = '';
+  if (totalPaginas <= 1 && usuariosFiltrados.length <= filasPorPagina) return;
+  
   for(let i=1;i<=totalPaginas;i++){
     const li = document.createElement('li');
     li.className = `page-item ${i===paginaActual?'active':''}`;
@@ -217,6 +260,7 @@ function renderizarPaginacion() {
 }
 
 function cambiarPagina(num) {
+  if (num < 1 || num > Math.ceil(usuariosFiltrados.length / filasPorPagina)) return;
   paginaActual = num;
   renderizarTabla(usuariosFiltrados);
   renderizarPaginacion();

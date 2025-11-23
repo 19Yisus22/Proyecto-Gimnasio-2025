@@ -4,6 +4,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from passlib.hash import scrypt
 from supabase import create_client
+from datetime import datetime, timezone 
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 import os, uuid, secrets, cloudinary, cloudinary.uploader, json
@@ -172,6 +173,7 @@ def logout():
     session.clear()
     return jsonify({"ok": True, "redirect": url_for("index")})
 
+
 # MODULOS MIEMBROS
 
 @app.route("/index_miembro")
@@ -184,7 +186,7 @@ def miembros_modulos_render(modulo):
 
 # SECCION CLASES
 
-# FUNCIONES APARTADO CLASES / MODULO CLASES RESERVAS - MIEMBRO (ARREGLAR BOTON RESERVAS)
+# FUNCIONES APARTADO CLASES / MODULO CLASES RESERVAS - MIEMBRO
 
 @app.route("/api/miembros_entrenamientos", methods=["GET"])
 def miembros_entrenamientos_listar():
@@ -226,109 +228,345 @@ def miembros_entrenamientos_borrar(id_entrenamiento):
 
 # FUNCIONES APARTADO RESERVAS / MODULO CLASES RESERVAS - MIEMBRO
 
-@app.route("/api/miembros/reservas", methods=["GET"])
-def miembros_reservas():
-    clases = supabase.table("a_gestion_clases").select("*").order("horario_inicio").execute()
+@app.route("/api/miembros/clases", methods=["GET"])
+def miembros_clases():
+    # 1. Obtener clases
+    clases_res = supabase.table("a_gestion_clases").select("*").order("horario_inicio").execute()
+    if not clases_res:
+        return jsonify({"ok": False, "message": "Error al obtener clases del servidor"}), 500
+    
     clases_data = []
-    for c in clases.data:
-        nombre_instructor = "Sin asignar"
-        if c.get("instructor_id"):
-            instructor = supabase.table("usuarios").select("nombre,apellido").eq("id_usuario", c["instructor_id"]).maybe_single().execute()
-            if instructor.data:
-                nombre_instructor = f"{instructor.data['nombre']} {instructor.data['apellido']}"
-        reservas = supabase.table("m_reservas").select("*").eq("id_clase", c["id_clase"]).eq("estado", "reservada").execute()
-        ocupados = len(reservas.data if reservas.data else [])
+    
+    # 2. Obtener reservas ocupadas (Reservada O Completada) para el cálculo de cupos
+    # AJUSTE: Contar reservas en estado 'reservada' o 'completada' (cupos no devueltos al completar).
+    reservas_ocupadas_res = supabase.table("m_clases_reservadas").select("id_clase", "fecha").in_("estado", ["reservada", "completada"]).execute()
+    
+    # Manejo defensivo
+    reservas_ocupadas_data = reservas_ocupadas_res.data if reservas_ocupadas_res else []
+
+    ocupados_por_clase_fecha = {}
+    instructor_ids = set()
+    
+    # Contar ocupados por (id_clase, fecha)
+    for r in reservas_ocupadas_data:
+        key = (r["id_clase"], r["fecha"])
+        ocupados_por_clase_fecha[key] = ocupados_por_clase_fecha.get(key, 0) + 1
+
+    # Recolectar IDs de instructores
+    for c in clases_res.data:
+        instructor_id = c.get("instructor_id")
+        if instructor_id:
+            instructor_ids.add(instructor_id)
+
+    # 3. Obtener nombres de instructores
+    instructor_cache = {}
+    if instructor_ids:
+        instructors_res = supabase.table("usuarios").select("id_usuario,nombre,apellido").in_("id_usuario", list(instructor_ids)).execute()
+        # Manejo defensivo
+        if instructors_res:
+            for u in instructors_res.data:
+                # Asumimos que si el ID está referenciado en a_gestion_clases, es un entrenador válido.
+                instructor_cache[u["id_usuario"]] = f"{u['nombre']} {u['apellido']}"
+
+    # 4. Construir lista final
+    for c in clases_res.data:
+        instructor_id = c.get("instructor_id")
+        nombre_instructor = instructor_cache.get(instructor_id) if instructor_id else "No Asignado"
+        
+        # Clave compuesta por id_clase y fecha
+        key = (c["id_clase"], c["fecha"])
+        ocupados = ocupados_por_clase_fecha.get(key, 0)
+        
         total = c.get("capacidad_max", 0)
+        disponibles = max(0, total - ocupados)
+        
         clases_data.append({
             "id_clase": str(c["id_clase"]),
+            "nombre": c.get("nombre"),
+            "descripcion": c.get("descripcion"),
             "tipo_clase": c["tipo_clase"],
             "instructor": nombre_instructor,
+            "instructor_id": instructor_id,
             "horario": f"{c['horario_inicio'][:-3]} - {c['horario_fin'][:-3]}",
+            "horario_inicio": c.get("horario_inicio"),
+            "horario_fin": c.get("horario_fin"),
             "fecha": c.get("fecha"),
+            "sala": c.get("sala"),
             "capacidad_max": total,
             "ocupados": ocupados,
-            "cupos_disponibles": f"{ocupados}/{total}"
+            "cupos_disponibles": f"{disponibles}/{total}",
+            "nivel_dificultad": c.get("nivel_dificultad"),
         })
     return jsonify({"ok": True, "clases": clases_data})
 
-@app.route('/api/miembros/reservas_crear', methods=['POST'])
+@app.route('/api/miembros/crear_reservas', methods=['POST'])
 def miembros_reservas_crear():
+    id_miembro = obtener_id_usuario()
+    if not id_miembro:
+        return jsonify({"ok": False, "message": "Usuario no autenticado"}), 401
+        
     data = request.get_json()
-    id_miembro = data.get("id_miembro")
     id_clase = data.get("id_clase")
-
-    if not id_miembro or not id_clase:
-        return jsonify({"error": "id_miembro y id_clase son obligatorios"}), 400
-
-    try:
-        existe_res = supabase.table("m_reservas").select("*").eq("id_miembro", id_miembro).eq("id_clase", id_clase).execute()
-    except Exception as e:
-        return jsonify({"error": "Error verificando reserva existente", "detalle": str(e)}), 500
-
-    if existe_res is None or getattr(existe_res, "data", None) is None:
-        return jsonify({"error": "Error inesperado consultando reservas"}), 500
-
-    if len(existe_res.data) > 0:
-        return jsonify({"error": "La reserva ya existe"}), 400
+    fecha_reserva = data.get("fecha")
+    
+    if not id_clase or not fecha_reserva:
+        return jsonify({"ok": False, "message": "id_clase y fecha son obligatorios"}), 400
 
     try:
-        nueva_res = supabase.table("m_reservas").insert({
+        existe_res = supabase.table("m_clases_reservadas").select("id_reserva").eq("id_miembro", id_miembro).eq("id_clase", id_clase).eq("fecha", fecha_reserva).eq("estado", "reservada").maybe_single().execute()
+
+        if existe_res and existe_res.data:
+             return jsonify({"ok": False, "message": "Ya tienes una reserva ACTIVA para esta clase en la fecha seleccionada"}), 400
+        class_res = supabase.table("a_gestion_clases").select("*").eq("id_clase", id_clase).maybe_single().execute()
+        
+        if not class_res or not class_res.data:
+            return jsonify({"ok": False, "message": "Clase no encontrada"}), 404
+
+        clase = class_res.data
+        reservas_ocupadas_res = supabase.table("m_clases_reservadas").select("id_reserva").eq("id_clase", id_clase).eq("fecha", fecha_reserva).in_("estado", ["reservada", "completada"]).execute()
+        reservas_ocupadas_data = reservas_ocupadas_res.data if reservas_ocupadas_res else []
+        ocupados = len(reservas_ocupadas_data)
+        total = clase.get("capacidad_max", 0)
+        
+        if ocupados >= total:
+            return jsonify({"ok": False, "message": "No hay cupos disponibles para esta clase en la fecha seleccionada"}), 400
+
+        reservation_data = {
             "id_miembro": id_miembro,
-            "id_clase": id_clase
-        }).execute()
+            "id_clase": id_clase,
+            "id_entrenador": clase.get("instructor_id"), 
+            "nombre": clase["nombre"],
+            "descripcion": clase.get("descripcion"),
+            "tipo_clase": clase["tipo_clase"],
+            "nivel_dificultad": clase.get("nivel_dificultad"),
+            "capacidad_max": clase["capacidad_max"],
+            "horario_inicio": clase["horario_inicio"],
+            "horario_fin": clase["horario_fin"],
+            "fecha": fecha_reserva,
+            "sala": clase.get("sala"),
+            "estado": "reservada",
+            "asistencia_confirmada": False
+        }
+
+        insert_res = supabase.table("m_clases_reservadas").insert(reservation_data).execute()
+        
+        if not insert_res or not insert_res.data:
+            raise Exception("La inserción en la base de datos no devolvió datos de éxito.")
+            
     except Exception as e:
-        return jsonify({"error": "Error creando la reserva", "detalle": str(e)}), 500
-
-    if nueva_res is None or getattr(nueva_res, "data", None) is None:
-        return jsonify({"error": "Error inesperado creando reserva"}), 500
-
-    return jsonify({"mensaje": "Reserva creada exitosamente"}), 201
+        return jsonify({"ok": False, "message": f"Error creando la reserva: {str(e)}"}), 500
+    return jsonify({"ok": True, "message": "Reserva creada exitosamente"})
 
 @app.route("/api/miembros/mis_reservas", methods=["GET"])
 def miembros_mis_reservas():
     id_miembro = obtener_id_usuario()
     if not id_miembro:
         return jsonify({"ok": False, "message": "Usuario no autenticado"}), 401
-    reservas = supabase.table("m_reservas").select("*").eq("id_miembro", id_miembro).execute()
+        
+    reservas_response = supabase.table("m_clases_reservadas").select("*").eq("id_miembro", id_miembro).order("fecha", desc=True).execute()
+    
+    if not reservas_response:
+         return jsonify({"ok": False, "message": "Error al obtener reservas del servidor"}), 500
+         
+    reservas = reservas_response.data
+    
+    instructor_ids = set()
+    for r in reservas:
+        instructor_id = r.get("id_entrenador")
+        if instructor_id:
+            instructor_ids.add(instructor_id)
+
+    instructor_cache = {}
+    if instructor_ids:
+        instructors_res = supabase.table("usuarios").select("id_usuario,nombre,apellido").in_("id_usuario", list(instructor_ids)).execute()
+        if instructors_res:
+            for u in instructors_res.data:
+                instructor_cache[u["id_usuario"]] = f"{u['nombre']} {u['apellido']}"
+            
     clases_reservadas = []
-    for r in reservas.data:
-        clase = supabase.table("a_gestion_clases").select("*").eq("id_clase", r["id_clase"]).maybe_single().execute()
-        if not clase.data:
-            continue
-        c = clase.data
-        nombre_instructor = "Sin asignar"
-        if c.get("instructor_id"):
-            instructor = supabase.table("usuarios").select("nombre,apellido").eq("id_usuario", c["instructor_id"]).maybe_single().execute()
-            if instructor.data:
-                nombre_instructor = f"{instructor.data['nombre']} {instructor.data['apellido']}"
-        reservas_clase = supabase.table("m_reservas").select("*").eq("id_clase", c["id_clase"]).eq("estado", "reservada").execute()
-        ocupados = len(reservas_clase.data if reservas_clase.data else [])
-        total = c.get("capacidad_max", 0)
+    total_reservas_comprometidas = 0
+    total_completadas = 0
+
+    for r in reservas:
+
+        if r.get("estado") in ["reservada", "completada"]:
+            total_reservas_comprometidas += 1
+            if r.get("asistencia_confirmada") == True:
+                total_completadas += 1
+
+        instructor_id = r.get("id_entrenador")
+        nombre_instructor = instructor_cache.get(instructor_id) if instructor_id else "No Asignado"
+        
+        ocupados = 0
+        total = r.get("capacidad_max", 0)
+        
+        if r.get("fecha"):
+
+            ocupados_res = supabase.table("m_clases_reservadas").select("id_reserva").eq("id_clase", r["id_clase"]).eq("fecha", r["fecha"]).in_("estado", ["reservada", "completada"]).execute()
+            ocupados_data = ocupados_res.data if ocupados_res else []
+            ocupados = len(ocupados_data)
+        
+        disponibles = max(0, total - ocupados)
         clases_reservadas.append({
             "id_reserva": r["id_reserva"],
-            "id_clase": c["id_clase"],
-            "tipo_clase": c["tipo_clase"],
+            "id_clase": r["id_clase"],
+            "nombre": r["nombre"],
+            "descripcion": r.get("descripcion"),
+            "tipo_clase": r["tipo_clase"],
+            "nivel_dificultad": r.get("nivel_dificultad"),
+            "capacidad_max": total,
+            "horario_inicio": r["horario_inicio"],
+            "horario_fin": r["horario_fin"],
+            "fecha": r["fecha"],
+            "sala": r["sala"],
             "instructor": nombre_instructor,
-            "horario": f"{c['horario_inicio'][:-3]} - {c['horario_fin'][:-3]}",
+            "instructor_id": instructor_id,
+            "horario": f"{r['horario_inicio'][:-3]} - {r['horario_fin'][:-3]}",
             "estado": r.get("estado", "reservada"),
-            "cupos_disponibles": f"{ocupados}/{total}"
+            "asistencia_confirmada": r.get("asistencia_confirmada", False),
+            "cupos_disponibles": f"{disponibles}/{total}"
         })
-    return jsonify({"ok": True, "clases": clases_reservadas})
+
+    progreso_porcentaje = (total_completadas / total_reservas_comprometidas * 100) if total_reservas_comprometidas > 0 else 0
+    return jsonify({"ok": True, "clases": clases_reservadas, "progreso": progreso_porcentaje})
 
 @app.route("/api/miembros/cancelar_reservas/<id_reserva>", methods=["PUT"])
 def miembros_reservas_cancelar(id_reserva):
-    resp = supabase.table("m_reservas").update({"estado": "cancelada"}).eq("id_reserva", id_reserva).execute()
-    return jsonify({"ok": True, "data": resp.data})
+    id_miembro = obtener_id_usuario()
+    if not id_miembro:
+        return jsonify({"ok": False, "message": "Usuario no autenticado"}), 401
+    
+    resp = supabase.table("m_clases_reservadas").update({
+        "estado": "cancelada", 
+        "asistencia_confirmada": False
+    }).eq("id_reserva", id_reserva).eq("id_miembro", id_miembro).eq("estado", "reservada").execute()
+    
+    if resp and resp.data:
+        return jsonify({"ok": True, "message": "Reserva cancelada exitosamente"})
+    return jsonify({"ok": False, "message": "Error al cancelar la reserva o la reserva no está activa"}), 500
 
 @app.route("/api/miembros/completar_reservas/<id_reserva>", methods=["PUT"])
 def miembros_reservas_completar(id_reserva):
-    resp = supabase.table("m_reservas").update({"estado": "completada"}).eq("id_reserva", id_reserva).execute()
-    return jsonify({"ok": True, "data": resp.data})
+    id_miembro = obtener_id_usuario()
+    if not id_miembro:
+        return jsonify({"ok": False, "message": "Usuario no autenticado"}), 401
+    
+    resp = supabase.table("m_clases_reservadas").update({
+        "estado": "completada", 
+        "asistencia_confirmada": True
+    }).eq("id_reserva", id_reserva).eq("id_miembro", id_miembro).eq("estado", "reservada").execute()
 
-@app.route("/api/miembros/eliminar_reserva/<id_reserva>", methods=["DELETE"])
+    if resp and resp.data:
+        return jsonify({"ok": True, "message": "Reserva marcada como completada"})
+    return jsonify({"ok": False, "message": "Error al completar la reserva o la reserva no estaba activa"}), 500
+
+@app.route("/api/miembros/reservas/<id_reserva>", methods=["DELETE"])
 def miembros_reservas_eliminar(id_reserva):
-    resp = supabase.table("m_reservas").delete().eq("id_reserva", id_reserva).execute()
-    return jsonify({"ok": True, "data": resp.data})
+    id_miembro = obtener_id_usuario()
+    if not id_miembro:
+        return jsonify({"ok": False, "message": "Usuario no autenticado"}), 401
+    
+    try:
+        reserva_res = supabase.table("m_clases_reservadas").select("estado").eq("id_reserva", id_reserva).eq("id_miembro", id_miembro).maybe_single().execute()
+    
+        if not reserva_res or not reserva_res.data:
+            return jsonify({"ok": False, "message": "Reserva no encontrada"}), 404
+        
+        if reserva_res.data.get("estado") == "reservada":
+            return jsonify({"ok": False, "message": "No se puede eliminar una reserva activa. Primero debes cancelarla."}), 400
+        
+        resp = supabase.table("m_clases_reservadas").delete().eq("id_reserva", id_reserva).eq("id_miembro", id_miembro).execute()
+
+        if resp and resp.data:
+            return jsonify({"ok": True, "message": "Reserva eliminada exitosamente"})
+        return jsonify({"ok": False, "message": "Error al eliminar la reserva"}), 500
+        
+    except Exception as e:
+        return jsonify({"ok": False, "message": f"Error al eliminar: {str(e)}"}), 500
+
+@app.route("/api/miembros/feedback/entrenador", methods=["POST"])
+def miembros_feedback_entrenador():
+    id_miembro = obtener_id_usuario()
+    if not id_miembro:
+        return jsonify({"ok": False, "message": "Usuario no autenticado"}), 401
+
+    data = request.get_json()
+    id_entrenador = data.get("id_entrenador")
+    mensaje = data.get("mensaje")
+    calificacion = data.get("calificacion")
+
+    if not id_entrenador or not mensaje or calificacion is None:
+        return jsonify({"ok": False, "message": "Datos de feedback incompletos"}), 400
+    
+    try:
+        calificacion = int(calificacion)
+        if not (1 <= calificacion <= 5):
+            return jsonify({"ok": False, "message": "La calificación debe ser entre 1 y 5"}), 400
+    except ValueError:
+        return jsonify({"ok": False, "message": "La calificación debe ser un número"}), 400
+
+    try:
+        resp = supabase.table("e_feedback_miembros").insert({
+            "id_entrenador": id_entrenador,
+            "id_miembro": id_miembro,
+            "mensaje": mensaje,
+            "calificacion": calificacion,
+        }).execute()
+
+        if resp and resp.data:
+            return jsonify({"ok": True, "message": "Feedback al entrenador enviado exitosamente"})
+        else:
+            return jsonify({"ok": False, "message": "Error al guardar el feedback"}), 500
+            
+    except Exception as e:
+        return jsonify({"ok": False, "message": "Error interno del servidor al enviar feedback", "detalle": str(e)}), 500
+
+@app.route("/api/miembros/feedback/clase", methods=["POST"])
+def miembros_feedback_clase():
+    id_miembro = obtener_id_usuario()
+    if not id_miembro:
+        return jsonify({"ok": False, "message": "Usuario no autenticado"}), 401
+
+    data = request.get_json()
+    id_clase = data.get("id_clase")
+    mensaje = data.get("mensaje")
+    calificacion = data.get("calificacion")
+
+    if not id_clase or not mensaje or calificacion is None:
+        return jsonify({"ok": False, "message": "Datos de feedback de clase incompletos"}), 400
+
+    try:
+        calificacion = int(calificacion)
+        if not (1 <= calificacion <= 5):
+            return jsonify({"ok": False, "message": "La calificación debe ser entre 1 y 5"}), 400
+    except ValueError:
+        return jsonify({"ok": False, "message": "La calificación debe ser un número"}), 400
+
+    try:
+        clase_res = supabase.table("a_gestion_clases").select("instructor_id").eq("id_clase", id_clase).maybe_single().execute()
+        
+        id_entrenador = None
+        if clase_res and clase_res.data:
+            id_entrenador = clase_res.data.get("instructor_id")
+        
+        feedback_data = {
+            "id_clase": id_clase,
+            "id_miembro": id_miembro,
+            "mensaje": mensaje,
+            "calificacion": calificacion,
+        }
+        
+        if id_entrenador:
+            feedback_data["id_entrenador"] = id_entrenador
+        resp = supabase.table("e_feedback_clases").insert(feedback_data).execute()
+
+        if resp and resp.data:
+            return jsonify({"ok": True, "message": "Feedback de clase enviado exitosamente"})
+        else:
+            return jsonify({"ok": False, "message": "Error al guardar el feedback de clase"}), 500
+            
+    except Exception as e:
+        return jsonify({"ok": False, "message": "Error interno del servidor al enviar feedback de clase", "detalle": str(e)}), 500
 
 # SECCION PROGRESO FISICO
 
@@ -343,7 +581,7 @@ def miembros_progreso_listar():
 def miembros_objetivos_listar():
     id_usuario = obtener_id_usuario()
     if not id_usuario:
-        return jsonify({"ok": False, "error":"Usuario no autenticado"}), 200  # Retorna 200 para que JS no rompa
+        return jsonify({"ok": False, "error":"Usuario no autenticado"}), 200
     data = supabase.table("m_objetivos").select("*").eq("id_miembro", id_usuario).execute()
     return jsonify({"ok": True, "data": data.data})
 
@@ -373,8 +611,136 @@ def miembros_objetivos_eliminar(id_objetivo):
     resp = supabase.table("m_objetivos").delete().eq("id_objetivo", id_objetivo).eq("id_miembro", id_usuario).execute()
     return jsonify({"ok": True, "data": resp.data})
 
+# SECCION PLAN NUTRICIONAL
 
+# FUNCIONES APARTADO PLAN NUTRICIONAL / MODULO PLAN NUTRICIONAL - MIEMBRO
 
+@app.route("/api/miembros/obtener_progreso_historico", methods=["GET"])
+def miembros_obtener_progreso_historico():
+    try:
+        id_miembro = obtener_id_usuario()
+        data = supabase.table("n_progreso_miembro").select("fecha, peso, grasa_corporal, masa_muscular").eq("id_miembro", id_miembro).order("fecha", desc=False).execute()
+        return jsonify({"ok": True, "data": data.data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/api/miembros/registrar_progreso", methods=["POST"])
+def miembros_registrar_progreso():
+    try:
+        id_miembro = obtener_id_usuario()
+        datos = request.json
+        insertar = supabase.table("n_progreso_miembro").insert({
+            "id_miembro": id_miembro,
+            "peso": datos.get("peso"),
+            "grasa_corporal": datos.get("grasa_corporal"),
+            "masa_muscular": datos.get("masa_muscular"),
+            "seguimiento_dieta": datos.get("seguimiento_dieta", ""),
+            "observaciones": datos.get("observaciones", "")
+        }).execute()
+        return jsonify({"ok": True, "data": insertar.data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/api/miembros/obtener_objetivo", methods=["GET"])
+def miembros_obtener_objetivo():
+    try:
+        id_miembro = obtener_id_usuario()
+        data = supabase.table("m_objetivos").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=True).limit(1).execute()
+        return jsonify({"ok": True, "data": data.data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/api/miembros/actualizar_objetivo", methods=["POST"])
+def miembros_actualizar_objetivo():
+    try:
+        id_miembro = obtener_id_usuario()
+        datos = request.json
+        actualizar = supabase.table("m_objetivos").insert({
+            "id_miembro": id_miembro,
+            "descripcion": datos.get("descripcion"),
+            "fecha_limite": datos.get("fecha_limite")
+        }).execute()
+        return jsonify({"ok": True, "data": actualizar.data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/api/miembros/plan_nutricional", methods=["GET"])
+def miembros_obtener_datos_combinados():
+    try:
+        id_miembro = obtener_id_usuario()
+        progreso = supabase.table("n_progreso_miembro").select("*").eq("id_miembro", id_miembro).order("fecha", desc=True).execute()
+        objetivo = supabase.table("m_objetivos").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=True).limit(1).execute()
+        return jsonify({
+            "ok": True,
+            "progreso": progreso.data,
+            "objetivo": objetivo.data
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/api/nutricion/obtener_plan_actual", methods=["GET"])
+def nutricion_obtener_plan_actual():
+    try:
+        id_miembro = obtener_id_usuario()
+        data = supabase.table("n_planes_nutricion").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=True).limit(1).execute()
+        return jsonify({"ok": True, "data": data.data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/api/nutricion/registrar_ingesta", methods=["POST"])
+def nutricion_registrar_ingesta():
+    try:
+        id_miembro = obtener_id_usuario()
+        datos = request.json
+        insertar = supabase.table("n_ingesta").insert({
+            "id_miembro": id_miembro,
+            "alimento": datos.get("alimento"),
+            "cantidad": datos.get("cantidad"),
+            "calorias": datos.get("calorias"),
+            "proteina": datos.get("proteina"), 
+            "grasa": datos.get("grasa"), 
+            "carbohidratos": datos.get("carbohidratos")
+        }).execute()
+        return jsonify({"ok": True, "data": insertar.data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/api/nutricion/obtener_ingesta", methods=["GET"])
+def nutricion_obtener_ingesta():
+    try:
+        id_miembro = obtener_id_usuario()
+        hoy = datetime.now().strftime(DATE_FORMAT)
+        data = supabase.table("n_ingesta").select("*").eq("id_miembro", id_miembro).eq("fecha", hoy).order("id_ingesta", desc=True).execute()
+        return jsonify({"ok": True, "data": data.data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/api/nutricion/obtener_chat", methods=["GET"])
+def nutricion_obtener_chat():
+    try:
+        id_miembro = obtener_id_usuario()
+        data = supabase.table("n_chat_nutricion").select("*").eq("id_miembro", id_miembro).order("fecha_hora", desc=False).execute()
+        return jsonify({"ok": True, "data": data.data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/api/nutricion/enviar_mensaje", methods=["POST"])
+def nutricion_enviar_mensaje():
+    try:
+        id_miembro = obtener_id_usuario()
+        datos = request.json
+        
+        fecha_hora_utc = datetime.now(timezone.utc).isoformat()
+        
+        insertar = supabase.table("n_chat_nutricion").insert({
+            "id_miembro": id_miembro,
+            "id_nutricionista": datos.get("id_nutricionista"),
+            "mensaje": datos.get("mensaje"),
+            "fecha_hora": fecha_hora_utc 
+        }).execute()
+        return jsonify({"ok": True, "data": insertar.data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # MODULOS ENTRENADOR
@@ -451,11 +817,13 @@ def entrenador_elimina_recordatorio_calendario(id_recordatorio):
 
 # SECCION RESERVAS
 
-# FUNCIONES SECCCION RESERVAS / MODULO MIS CLASES - ENTRENADOR (ARREGLAR TODO)
+# FUNCIONES SECCCION RESERVAS / MODULO MIS CLASES - ENTRENADOR
 
 @app.route("/api/miembros", methods=["GET"])
 def listar_miembros():
     roles = supabase.table("roles").select("id_rol").eq("nombre_rol", "miembro").execute()
+    if not roles.data:
+        return jsonify({"error": "Rol 'miembro' no encontrado"}), 404
     id_rol_miembro = roles.data[0]["id_rol"]
     resp = supabase.table("usuarios").select("*").eq("id_rol", id_rol_miembro).execute()
     return jsonify(resp.data), 200
@@ -463,49 +831,119 @@ def listar_miembros():
 @app.route("/api/reservas", methods=["POST"])
 def crear_reserva():
     data = request.get_json()
-    resp = supabase.table("m_reservas").insert({
+    resp = supabase.table("m_clases_reservadas").insert({
         "id_miembro": data["id_miembro"],
         "id_clase": data["id_clase"],
-        "fecha_reserva": data.get("fecha_reserva"),
+        "id_entrenador": data.get("id_entrenador"),
         "estado": "reservada",
-        "notas": data.get("notas")
     }).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/reservas", methods=["GET"])
-def listar_reservas():
-    resp = supabase.table("m_reservas").select("*").execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/reservas/miembro/<id_miembro>", methods=["GET"])
-def reservas_por_miembro(id_miembro):
-    resp = supabase.table("m_reservas").select("*").eq("id_miembro", id_miembro).execute()
-    return jsonify(resp.data), 200
+    return jsonify(resp.data), 201
 
 @app.route("/api/reservas/<id_reserva>", methods=["PUT"])
 def actualizar_reserva(id_reserva):
     data = request.get_json()
-    resp = supabase.table("m_reservas").update(data).eq("id_reserva", id_reserva).execute()
+    update_data = {}
+    if "asistencia_confirmada" in data:
+        update_data["asistencia_confirmada"] = data["asistencia_confirmada"]
+    
+    if not update_data:
+        return jsonify({"error": "No se proporcionaron datos para actualizar."}), 400
+    
+    resp = supabase.table("m_clases_reservadas").update(update_data).eq("id_reserva", id_reserva).execute()
     return jsonify(resp.data), 200
 
 @app.route("/api/reservas/<id_reserva>", methods=["DELETE"])
 def eliminar_reserva(id_reserva):
-    resp = supabase.table("m_reservas").delete().eq("id_reserva", id_reserva).execute()
-    return jsonify(resp.data), 200
+    resp = supabase.table("m_clases_reservadas").delete().eq("id_reserva", id_reserva).execute()
+    return jsonify({"mensaje": f"Reserva {id_reserva} eliminada"}), 200
+
+@app.route("/api/reservas/miembro/<id_miembro>", methods=["GET"])
+def reservas_por_miembro(id_miembro):
+    try:
+        query = supabase.table("m_clases_reservadas").select(
+            "id_reserva, id_clase, estado, asistencia_confirmada, fecha_creacion, clase:a_gestion_clases(nombre, horario_inicio, horario_fin, instructor:usuarios(nombre, apellido))"
+        ).eq("id_miembro", id_miembro).eq("estado", "reservada")
+        
+        resp = query.execute()
+        
+    except Exception as e:
+        return jsonify({"error": "Error interno del servidor al consultar reservas."}), 500
+
+    reservas_data = []
+    for r in resp.data:
+        clase_info = r.get('clase') 
+        
+        if isinstance(clase_info, list) and clase_info:
+            clase_info = clase_info[0]
+        
+        clase_valida = clase_info and isinstance(clase_info, dict)
+        
+        nombre_clase = clase_valida and clase_info.get("nombre") or "Clase Desconocida" 
+        horario_inicio = clase_valida and clase_info.get("horario_inicio") or ""
+        horario_fin = clase_valida and clase_info.get("horario_fin") or ""
+        
+        instructor_info = clase_valida and clase_info.get("instructor")
+        if isinstance(instructor_info, list) and instructor_info:
+            instructor_info = instructor_info[0]
+        
+        nombre_entrenador = "No Asignado"
+        if instructor_info and isinstance(instructor_info, dict):
+            nombre_entrenador = f"{instructor_info.get('nombre', '')} {instructor_info.get('apellido', '')}".strip()
+        
+        reservas_data.append({
+            "id_reserva": r.get("id_reserva"),
+            "id_miembro": id_miembro, 
+            "id_clase": r.get("id_clase"),
+            "nombre_entrenador": nombre_entrenador,
+            "estado": r.get("estado"),
+            "asistencia_confirmada": r.get("asistencia_confirmada"),
+            "fecha_creacion": r.get("fecha_creacion"),
+            "nombre_clase": nombre_clase,
+            "horario_inicio": horario_inicio,
+            "horario_fin": horario_fin,
+        })
+    
+    return jsonify(reservas_data), 200
 
 # SECCION NOTIFICACIONES
 
 # FUNCIONES SECCION NOTIFICACIONES / MODULO MIS CLASES - ENTRENADOR
 
+@app.route("/api/notificaciones", methods=["POST"])
+def crear_notificacion():
+    data = request.get_json()
+    payload = {
+        "id_miembro": data.get("id_miembro"),
+        "titulo": data.get("titulo"),
+        "descripcion": data.get("descripcion"),
+        "tipo_notificacion": data.get("tipo_notificacion"),
+        "fecha": datetime.now().date().isoformat() # Usamos la fecha actual por defecto
+    }
+    payload = {k: v for k, v in payload.items() if v is not None}
+    
+    # El campo 'leida' ha sido omitido ya que su gestión corresponde al miembro.
+    resp = supabase.table("m_notificaciones_miembros").insert(payload).execute()
+    return jsonify(resp.data), 201
+
+@app.route("/api/notificaciones/<id_miembro>", methods=["GET"])
+def obtener_notificaciones_miembro(id_miembro):
+    resp = (
+        supabase.table("m_notificaciones_miembros")
+        .select("*")
+        .eq("id_miembro", id_miembro)
+        .order("fecha", desc=True)
+        .execute()
+    )
+    return jsonify(resp.data), 200
+
 @app.route("/api/notificaciones/<id_notificacion>", methods=["PUT"])
 def actualizar_notificacion(id_notificacion):
+    """Actualiza una notificación específica (sin campo 'leida')."""
     data = request.get_json()
     payload = {
         "titulo": data.get("titulo"),
         "descripcion": data.get("descripcion"),
         "tipo_notificacion": data.get("tipo_notificacion"),
-        "imagen_url": data.get("imagen_url"),
-        "leida": data.get("leida")
     }
     payload = {k: v for k, v in payload.items() if v is not None}
     resp = (
@@ -525,6 +963,10 @@ def eliminar_notificacion(id_notificacion):
         .execute()
     )
     return jsonify(resp.data), 200
+
+# SECCION PROGRESO
+
+# FUNCIONES SECCION NOTIFICACIONES / MODULO PROGRESO MIEMBROS - ENTRENADOR
 
 @app.route("/api/progreso", methods=["POST"])
 def crear_progreso():
@@ -576,6 +1018,7 @@ def actualizar_progreso(id_progreso):
 
 @app.route("/api/progreso/<id_progreso>", methods=["DELETE"])
 def eliminar_progreso(id_progreso):
+
     resp = (
         supabase.table("m_progreso")
         .delete()
@@ -583,68 +1026,6 @@ def eliminar_progreso(id_progreso):
         .execute()
     )
     return jsonify(resp.data), 200
-
-# SECCION PROGRESO
-
-# FUNCIONES APARTADO PROGRESO / MODULO MIS CLASES CLASES - ENTRENADOR
-
-@app.route("/miembros_progreso")
-def entrenador_miembros_progreso():
-    miembros_data = supabase.table("usuarios").select(
-        "id_usuario,nombre,apellido,roles(nombre_rol),progreso(id_progreso,peso,grasa_corporal,masa_muscular,calorias_quemadas,fuerza,resistencia,fecha,objetivo_personal),entrenamientos_personales!entrenamientos_personales_id_miembro_fkey(id_entrenador)"
-    ).eq("roles.nombre_rol", "miembro").execute()
-
-    miembros = []
-    for m in miembros_data.data:
-        historial = m.get("progreso", [])
-        ultimo = max(historial, key=lambda x: x["fecha"], default={})
-        entrenador_nombre = ""
-        if m.get("entrenamientos_personales"):
-            entrenador_id = m["entrenamientos_personales"][0].get("id_entrenador")
-            if entrenador_id:
-                entrenador_data = supabase.table("usuarios").select("nombre,apellido").eq("id_usuario", entrenador_id).execute()
-                if entrenador_data.data:
-                    entrenador_nombre = f'{entrenador_data.data[0]["nombre"]} {entrenador_data.data[0]["apellido"]}'
-        miembros.append({
-            "id": m["id_usuario"],
-            "nombre": f'{m["nombre"]} {m["apellido"]}',
-            "entrenador": entrenador_nombre,
-            "peso": ultimo.get("peso", 0),
-            "grasa_corporal": ultimo.get("grasa_corporal", 0),
-            "masa_muscular": ultimo.get("masa_muscular", 0),
-            "fuerza": ultimo.get("fuerza", 0),
-            "resistencia": ultimo.get("resistencia", 0),
-            "calorias": ultimo.get("calorias_quemadas", 0),
-            "ultima_sesion": ultimo.get("fecha", ""),
-            "objetivo_personal": ultimo.get("objetivo_personal", "")
-        })
-    return jsonify({"ok": True, "miembros": miembros})
-
-@app.route("/entrenadores")
-def entrenadores():
-    rol_entrenador = supabase.table("roles").select("id_rol").eq("nombre_rol", "Entrenador").execute()
-    if not rol_entrenador.data:
-        return jsonify({"ok": False, "entrenadores": []})
-    id_rol_entrenador = rol_entrenador.data[0]["id_rol"]
-
-    entrenadores_data = supabase.table("usuarios").select("id_usuario,nombre,apellido").eq("id_rol", id_rol_entrenador).execute()
-    entrenadores = [
-        {"id": e["id_usuario"], "nombre": f'{e["nombre"]} {e["apellido"]}'}
-        for e in entrenadores_data.data
-    ]
-    return jsonify({"ok": True, "entrenadores": entrenadores})
-
-@app.route("/miembro_detalle/<id>")
-def entrenador_miembro_detalle(id):
-    historial_data = supabase.table("progreso").select(
-        "fecha,peso,grasa_corporal,masa_muscular,fuerza,resistencia,calorias_quemadas,objetivo_personal"
-    ).eq("id_miembro", id).order("fecha", ascending=True).execute()
-    historial = historial_data.data
-    if historial:
-        for h in historial:
-            h["calorias"] = h.pop("calorias_quemadas", 0)
-        return jsonify({"ok": True, "historial": historial})
-    return jsonify({"ok": False})
 
 # SECCION ENTRENAMIENTOS PERSONALIZADOS
 
@@ -754,51 +1135,30 @@ def entrenador_eliminar_plan(id_entrenamiento):
     resp = supabase.table("m_entrenamientos_personales").delete().eq("id_entrenamiento", id_entrenamiento).execute()
     return jsonify(resp.data), 200
 
-# SECCION SEGUIMIENTO O PROGRESO
-
-# FUNCIONES APARTADO SEGUIMIENTO DIARIO / MODULO ENTRENAMIENTOS PERSONALIZADOS - ENTRENADOR
-
-@app.route("/api/progreso/<id_progreso>", methods=["PUT"])
-def entrenador_actualizar_progreso(id_progreso):
-    data = request.get_json()
-    payload = {
-        "peso": data.get("peso"),
-        "grasa_corporal": data.get("grasa_corporal"),
-        "masa_muscular": data.get("masa_muscular"),
-        "notas": data.get("notas"),
-        "objetivo_personal": data.get("objetivo_personal"),
-        "fecha": data.get("fecha")
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    resp = supabase.table("progreso").update(payload).eq("id_progreso", id_progreso).execute()
-    return jsonify(resp.data), 200
-
-@app.route("/api/progreso/<id_progreso>", methods=["DELETE"])
-def entrenador_eliminar_progreso(id_progreso):
-    try:
-        uuid_obj = uuid.UUID(id_progreso)
-    except ValueError:
-        return jsonify({"error": "ID inválido"}), 400
-    resp = supabase.table("progreso").delete().eq("id_progreso", str(uuid_obj)).execute()
-    return jsonify(resp.data), 200
-
 # SECCION FEEDBACK
 
 # FUNCIONES APARTADO FEEDBACK / MODULO ENTRENAMIENTOS PERSONALIZADOS - ENTRENADOR
 
 @app.route("/api/feedback/<id_miembro>", methods=["GET"])
 def entrenador_obtener_feedback(id_miembro):
-    resp = supabase.table("m_feedback_entrenadores").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=False).execute()
+    resp = supabase.table("e_feedback_miembros").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=False).execute()
     return jsonify(resp.data), 200
 
 @app.route("/api/feedback", methods=["POST"])
 def entrenador_crear_feedback():
     data = request.get_json()
-    cal = int(data.get("calificacion", 0))
-    if cal < 1 or cal > 5:
-        return jsonify({"error": "calificacion invalida"}), 400
+    cal = data.get("calificacion")
+    
+    try:
+        cal = int(cal)
+        if not (1 <= cal <= 5):
+            return jsonify({"error": "Calificación inválida. Debe ser un número entre 1 y 5."}), 400
+    except (TypeError, ValueError):
+        return jsonify({"error": "Calificación requerida y debe ser un número entero."}), 400
+
     if not data.get("mensaje") or not data.get("mensaje").strip():
-        return jsonify({"error": "mensaje requerido"}), 400
+        return jsonify({"error": "Mensaje requerido"}), 400
+        
     payload = {
         "id_feedback": str(uuid.uuid4()),
         "id_entrenador": data.get("id_entrenador"),
@@ -806,28 +1166,75 @@ def entrenador_crear_feedback():
         "mensaje": data.get("mensaje"),
         "calificacion": cal
     }
+    
     payload = {k: v for k, v in payload.items() if v is not None}
+    
     resp = supabase.table("m_feedback_entrenadores").insert(payload).execute()
-    return jsonify(resp.data), 200
+    
+    if resp.data:
+        return jsonify(resp.data), 201
+    else:
+        return jsonify({"error": "Error al crear el feedback en la base de datos"}), 500
 
 @app.route("/api/feedback/<id_feedback>", methods=["PUT"])
 def entrenador_actualizar_feedback(id_feedback):
     data = request.get_json()
-    cal = int(data.get("calificacion", 0))
-    if cal < 1 or cal > 5:
-        return jsonify({"error": "calificacion invalida"}), 400
-    payload = {
-        "mensaje": data.get("mensaje"),
-        "calificacion": cal
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
+    payload = {}
+
+    mensaje = data.get("mensaje")
+    if mensaje is not None:
+        if not mensaje.strip():
+            return jsonify({"error": "El mensaje no puede estar vacío"}), 400
+        payload["mensaje"] = mensaje
+
+    cal = data.get("calificacion")
+    if cal is not None:
+        try:
+            cal = int(cal)
+            if not (1 <= cal <= 5):
+                return jsonify({"error": "Calificación inválida. Debe ser un número entre 1 y 5."}), 400
+            payload["calificacion"] = cal
+        except (TypeError, ValueError):
+            return jsonify({"error": "La calificación debe ser un número entero."}), 400
+
+    if not payload:
+        return jsonify({"error": "Datos de actualización no proporcionados"}), 400
+
     resp = supabase.table("m_feedback_entrenadores").update(payload).eq("id_feedback", id_feedback).execute()
-    return jsonify(resp.data), 200
+    
+    if resp.data:
+        return jsonify(resp.data), 200
+    else:
+        return jsonify({"error": "Error al actualizar el feedback"}), 500
 
 @app.route("/api/feedback/<id_feedback>", methods=["DELETE"])
 def entrenador_eliminar_feedback(id_feedback):
     resp = supabase.table("m_feedback_entrenadores").delete().eq("id_feedback", id_feedback).execute()
     return jsonify(resp.data), 200
+
+@app.route("/api/calificaciones_clases/<id_instructor>", methods=["GET"])
+def instructor_obtener_calificaciones_clases(id_instructor):
+    calificacion_param = request.args.get("calificacion")
+    
+    query = supabase.table("e_feedback_miembros").select("*").eq("id_entrenador", id_instructor)
+    
+    if calificacion_param is not None:
+        try:
+            cal = int(calificacion_param)
+            
+            if not (1 <= cal <= 5):
+                return jsonify({"error": "Calificación inválida. Debe ser un número entre 1 y 5."}), 400
+            
+            query = query.eq("calificacion", cal)
+            
+        except ValueError:
+            return jsonify({"error": "La calificación debe ser un número entero."}), 400
+    
+    try:
+        resp = query.execute()
+        return jsonify(resp.data), 200
+    except Exception as e:
+        return jsonify({"error": "Ocurrió un error al obtener las calificaciones."}), 500 
 
 # FIN MODULO - ENTRENADOR
 
@@ -1299,15 +1706,8 @@ def admin_marketing_get():
         "secciones": secciones
     })
 
-# FALTA POR TERMINAR
 
-@app.route("/index_recepcionista")
-def index_recepcionista():
-    return render_template("inicio.html", user=session.get("user"))
-
-@app.route("/recepcionista_modulos_render/<modulo>")
-def recepcionista_modulos_render(modulo):
-    return render_template(f"receptionist_modules/{modulo}.html", user=session.get("user"))
+# MODULO NUTRICIONISTA
 
 @app.route("/index_nutricionista")
 def index_nutricionista():
@@ -1316,6 +1716,313 @@ def index_nutricionista():
 @app.route("/nutricionista_modulos_render/<modulo>")
 def nutricionista_modulos_render(modulo):
     return render_template(f"nutritionist_modules/{modulo}.html", user=session.get("user"))
+
+# SECCION GESTION USUARIOS
+
+# FUNCIONES APARTADO GESTION USUARIOS / MODULO GESTION USUARIOS - NUTRICIONISTA
+
+@app.route("/api/nutricionista/perfil/buscar", methods=["GET"])
+def nutricionista_buscar_miembro():
+    q = request.args.get("q", "")
+    res = supabase.table("usuarios").select("*").ilike("nombre", f"%{q}%").execute()
+    items = [{"id": u["id_usuario"], "name": u["nombre"], "email": u["correo"]} for u in res.data]
+    return jsonify({"items": items})
+
+@app.route("/api/nutricionista/perfil/get/<member_id>", methods=["GET"])
+def nutricionista_obtener_perfil(member_id):
+    usuario_resp = supabase.table("usuarios").select("*").eq("id_usuario", member_id).single().execute()
+    usuario = usuario_resp.data
+    if not usuario:
+        return jsonify({"error": "Miembro no encontrado"}), 404
+
+    progreso_resp = supabase.table("n_progreso_miembro").select("*").eq("id_miembro", member_id).order("fecha", desc=True).execute()
+    progreso = progreso_resp.data if progreso_resp.data else []
+
+    objetivos_resp = supabase.table("m_objetivos").select("*").eq("id_miembro", member_id).order("fecha_limite").execute()
+    objetivos = objetivos_resp.data if objetivos_resp.data else []
+
+    estado_salud_resp = supabase.table("m_estado_salud").select("*").eq("id_miembro", member_id).order("fecha", desc=True).execute()
+    estados_salud = estado_salud_resp.data if estado_salud_resp.data else []
+
+    sesiones_resp = supabase.table("n_sesiones_progreso").select("*").eq("id_miembro", member_id).order("fecha", desc=True).execute()
+    sesiones = sesiones_resp.data if sesiones_resp.data else []
+
+    historial = {
+        "fechas": [p["fecha"] for p in progreso],
+        "peso": [float(p["peso"]) if p["peso"] is not None else None for p in progreso],
+        "grasa": [float(p["grasa_corporal"]) if p["grasa_corporal"] is not None else None for p in progreso],
+        "masa_muscular": [float(p["masa_muscular"]) if p["masa_muscular"] is not None else None for p in progreso]
+    }
+
+    last_update = progreso[0]["fecha"] if progreso else None
+
+    edad = None
+    if usuario.get("fecha_nacimiento"):
+        from datetime import datetime
+        fecha_nac = datetime.strptime(usuario["fecha_nacimiento"], "%Y-%m-%d")
+        hoy = datetime.now()
+        edad = hoy.year - fecha_nac.year - ((hoy.month, hoy.day) < (fecha_nac.month, fecha_nac.day))
+
+    return jsonify({
+        "usuario": {
+            "nombre": f"{usuario.get('nombre', '')} {usuario.get('apellido', '')}".strip(),
+            "correo": usuario.get("correo", ""),
+            "avatar": usuario.get("imagen_url", ""),
+            "edad": edad,
+            "telefono": usuario.get("telefono", ""),
+            "direccion": usuario.get("direccion", ""),
+            "estado": "Activo"
+        },
+        "objetivos": objetivos,
+        "estado_salud": estados_salud,
+        "sesiones": sesiones,
+        "historial": historial,
+        "last_update": last_update
+    })
+
+@app.route("/api/nutricionista/progreso/registrar", methods=["POST"])
+def nutricionista_registrar_progreso():
+    data = request.json
+    insert_data = {
+        "id_miembro": data["id_miembro"],
+        "peso": data.get("peso"),
+        "grasa_corporal": data.get("grasa_corporal"),
+        "masa_muscular": data.get("masa_muscular"),
+        "observaciones": data.get("observaciones")
+    }
+    res = supabase.table("n_progreso_miembro").insert(insert_data).execute()
+    return jsonify(res.data)
+
+# SECCION PLAN NUTRICIONAL
+
+# FUNCIONES APARTADO EVALUACION INICIAL / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
+
+@app.route("/api/nutricionista/n_evaluacion_inicial", methods=["POST"])
+def n_evaluacion_inicial_crear():
+    data = request.json
+    insert_data = {
+        "id_miembro": data.get("id_miembro"),
+        "nombre": data.get("nombre"),
+        "edad": data.get("edad"),
+        "sexo": data.get("sexo"),
+        "peso": data.get("peso"),
+        "altura": data.get("altura"),
+        "actividad": data.get("actividad"),
+        "restricciones": data.get("restricciones")
+    }
+    res = supabase.table("n_evaluacion_inicial").insert(insert_data).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_evaluacion_inicial/<id_miembro>", methods=["GET"])
+def n_evaluacion_inicial_obtener(id_miembro):
+    res = supabase.table("n_evaluacion_inicial").select("*").eq("id_miembro", id_miembro).execute()
+    return jsonify(res.data)
+
+# SECCION PLAN NUTRICIONAL
+
+# FUNCIONES APARTADO CREAR PLAN / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
+
+@app.route("/api/nutricionista/n_planes_nutricion", methods=["POST"])
+def n_planes_nutricion_crear():
+    data = request.json
+    insert_data = {
+        "id_miembro": data.get("id_miembro"),
+        "id_nutricionista": data.get("id_nutricionista"),
+        "descripcion": data.get("descripcion"),
+        "calorias": data.get("calorias"),
+        "proteina": data.get("proteina"),
+        "grasa": data.get("grasa"),
+        "carbohidratos": data.get("carbohidratos"),
+        "plantilla": data.get("plantilla"),
+        "fecha_inicio": data.get("fecha_inicio"),
+        "fecha_fin": data.get("fecha_fin"),
+        "feedback": data.get("feedback", ""),
+        "recomendaciones": data.get("recomendaciones", "")
+    }
+    res = supabase.table("n_planes_nutricion").insert(insert_data).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_planes_nutricion/miembro/<id_miembro>", methods=["GET"])
+def n_planes_nutricion_por_miembro(id_miembro):
+    res = supabase.table("n_planes_nutricion").select("*").eq("id_miembro", id_miembro).order("fecha_creacion", desc=True).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_planes_nutricion", methods=["GET"])
+def n_planes_nutricion_todos():
+    res = supabase.table("n_planes_nutricion").select("*").order("fecha_creacion", desc=True).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_planes_nutricion/<id_plan>", methods=["PUT"])
+def n_planes_nutricion_actualizar(id_plan):
+    data = request.json
+    update_data = {
+        "descripcion": data.get("descripcion"),
+        "calorias": data.get("calorias"),
+        "proteina": data.get("proteina"),
+        "grasa": data.get("grasa"),
+        "carbohidratos": data.get("carbohidratos"),
+        "plantilla": data.get("plantilla"),
+        "fecha_inicio": data.get("fecha_inicio"),
+        "fecha_fin": data.get("fecha_fin"),
+        "feedback": data.get("feedback"),
+        "recomendaciones": data.get("recomendaciones")
+    }
+    clean = {k: v for k, v in update_data.items() if v is not None}
+    res = supabase.table("n_planes_nutricion").update(clean).eq("id_plan", id_plan).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_planes_nutricion/<id_plan>", methods=["DELETE"])
+def n_planes_nutricion_eliminar(id_plan):
+    res = supabase.table("n_planes_nutricion").delete().eq("id_plan", id_plan).execute()
+    return jsonify(res.data)
+
+# SECCION PLAN NUTRICIONAL
+
+# FUNCIONES APARTADO RESGISTRAR PROGRESO / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
+
+@app.route("/api/nutricionista/n_sesiones_progreso", methods=["POST"])
+def n_sesiones_progreso_crear():
+    data = request.json
+    insert_data = {
+        "id_plan": data.get("id_plan"),
+        "id_miembro": data.get("id_miembro"),
+        "fecha": data.get("fecha"),
+        "hora": data.get("hora"),
+        "peso": data.get("peso"),
+        "grasa_corporal": data.get("grasa_corporal"),
+        "masa_muscular": data.get("masa_muscular"),
+        "seguimiento_dieta": data.get("seguimiento_dieta"),
+        "observaciones": data.get("observaciones"),
+        "notas": data.get("notas"),
+        "estado": data.get("estado", "programada")
+    }
+    res = supabase.table("n_sesiones_progreso").insert(insert_data).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_sesiones_progreso/miembro/<id_miembro>", methods=["GET"])
+def n_sesiones_progreso_por_miembro(id_miembro):
+    res = supabase.table("n_sesiones_progreso").select("*").eq("id_miembro", id_miembro).order("fecha", desc=True).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_sesiones_progreso", methods=["GET"])
+def n_sesiones_progreso_todos():
+    res = supabase.table("n_sesiones_progreso").select("*").order("fecha", desc=True).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_sesiones_progreso/<id_sesion>", methods=["PUT"])
+def n_sesiones_progreso_actualizar(id_sesion):
+    data = request.json
+    update_data = {
+        "fecha": data.get("fecha"),
+        "hora": data.get("hora"),
+        "peso": data.get("peso"),
+        "grasa_corporal": data.get("grasa_corporal"),
+        "masa_muscular": data.get("masa_muscular"),
+        "seguimiento_dieta": data.get("seguimiento_dieta"),
+        "observaciones": data.get("observaciones"),
+        "notas": data.get("notas"),
+        "estado": data.get("estado")
+    }
+    clean = {k: v for k, v in update_data.items() if v is not None}
+    res = supabase.table("n_sesiones_progreso").update(clean).eq("id_sesion", id_sesion).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_sesiones_progreso/<id_sesion>", methods=["DELETE"])
+def n_sesiones_progreso_eliminar(id_sesion):
+    res = supabase.table("n_sesiones_progreso").delete().eq("id_sesion", id_sesion).execute()
+    return jsonify(res.data)
+
+# SECCION PLAN NUTRICIONAL
+
+# FUNCIONES APARTADO CHAT/FEEDBACK / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
+
+@app.route("/api/nutricionista/n_chat_nutricion", methods=["POST"])
+def n_chat_nutricion_crear():
+    try:
+        data = request.json
+        insert_data = {
+            "id_miembro": data.get("id_miembro"),
+            "id_nutricionista": data.get("id_nutricionista"),
+            "mensaje": data.get("mensaje"),
+            "remitente": data.get("remitente")
+        }
+        res = supabase.table("n_chat_nutricion").insert(insert_data).execute()
+        return jsonify(res.data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/nutricionista/n_chat_nutricion/miembro/<id_miembro>", methods=["GET"])
+def n_chat_por_miembro(id_miembro):
+    try:
+        res = supabase.table("n_chat_nutricion").select("*").eq("id_miembro", id_miembro).order("fecha_hora", desc=False).execute()
+        return jsonify(res.data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# SECCION PLAN NUTRICIONAL
+
+# FUNCIONES APARTADO CREAR INGESTA / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
+    
+@app.route("/api/nutricionista/n_ingesta", methods=["POST"])
+def n_ingesta_crear():
+    data = request.json
+    insert_data = {
+        "id_miembro": data.get("id_miembro"),
+        "id_plan": data.get("id_plan"),
+        "fecha": data.get("fecha"),
+        "alimento": data.get("alimento"),
+        "cantidad": data.get("cantidad"),
+        "calorias": data.get("calorias"),
+        "proteina": data.get("proteina"),
+        "grasa": data.get("grasa"),
+        "carbohidratos": data.get("carbohidratos")
+    }
+    res = supabase.table("n_ingesta").insert(insert_data).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_ingesta/miembro/<id_miembro>", methods=["GET"])
+def n_ingesta_por_miembro(id_miembro):
+    res = supabase.table("n_ingesta").select("*").eq("id_miembro", id_miembro).order("fecha", desc=True).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/n_ingesta/<id_ingesta>", methods=["DELETE"])
+def n_ingesta_eliminar(id_ingesta):
+    res = supabase.table("n_ingesta").delete().eq("id_ingesta", id_ingesta).execute()
+    return jsonify(res.data)
+
+# SECCION PLAN NUTRICIONAL
+
+# FUNCIONES APARTADO CREAR PROGRESO / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
+
+@app.route("/api/nutricionista/progreso/registrar", methods=["POST"])
+def n_progreso_registrar():
+    data = request.json
+    insert_data = {
+        "id_miembro": data.get("id_miembro"),
+        "fecha": data.get("fecha"),
+        "peso": data.get("peso"),
+        "grasa_corporal": data.get("grasa_corporal"),
+        "masa_muscular": data.get("masa_muscular"),
+        "seguimiento_dieta": data.get("seguimiento_dieta"),
+        "observaciones": data.get("observaciones")
+    }
+    res = supabase.table("n_progreso_miembro").insert(insert_data).execute()
+    return jsonify(res.data)
+
+@app.route("/api/nutricionista/progreso/listar/<id_miembro>", methods=["GET"])
+def n_progreso_listar(id_miembro):
+    res = supabase.table("n_progreso_miembro").select("*").eq("id_miembro", id_miembro).order("fecha", desc=True).execute()
+    return jsonify(res.data)
+
+# INDEX SIN USAR
+
+@app.route("/index_recepcionista")
+def index_recepcionista():
+    return render_template("inicio.html", user=session.get("user"))
+
+@app.route("/recepcionista_modulos_render/<modulo>")
+def recepcionista_modulos_render(modulo):
+    return render_template(f"receptionist_modules/{modulo}.html", user=session.get("user"))
 
 # APP RUN
 

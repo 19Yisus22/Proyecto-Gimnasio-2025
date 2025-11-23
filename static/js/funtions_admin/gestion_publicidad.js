@@ -34,20 +34,6 @@ document.getElementById("archivoNotificacion").addEventListener("change", e => {
   r.readAsDataURL(file);
 });
 
-function guardarIdioma() {
-  const idioma = idiomaSistema.value;
-  fetch("/api/admin/configuracion", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idioma })
-  })
-    .then(r => r.json())
-    .then(d => {
-      toast(d.msg);
-      document.documentElement.lang = idioma;
-    });
-}
-
 async function crearNotificacion() {
   const fileInput = document.getElementById("archivoNotificacion");
   const titulo = document.getElementById("tituloNotificacion").value;
