@@ -3,23 +3,422 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reservas | GymApp</title>
+<title>Gestión de Reservas | Recepción</title>
 <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='uploads/icon.png') }}">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style_pedido.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/styles_receptionist/style_gestionar_reservas.css') }}">
+<style>
+.widget-card {
+    transition: transform 0.2s;
+    cursor: pointer;
+    min-height: 180px;
+}
+.widget-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.pagination {
+    justify-content: center;
+    margin-top: 20px;
+}
+</style>
 </head>
 <body>
 
 {% include 'navbar.html' %}
 
 <div id="main-content" class="container mt-4" style="margin-left:250px;">
-  <h2 class="mb-4 text-center">Estamos en matenimiento...</h2>
-<div id="toastContainer" class="position-fixed p-3 top-0 end-0"></div>
+    <div class="card-title-center mb-4"><i class="bi bi-calendar-check-fill"></i> Gestión de Reservas (Servicios Complementarios)</div>
+
+    <div class="row row-cols-1 row-cols-md-3 g-4">
+        
+        <div class="col">
+            <div class="card shadow-sm border-success widget-card" data-bs-toggle="modal" data-bs-target="#modalNutricion">
+                <div class="card-body text-center">
+                    <i class="bi bi-apple display-4 text-success"></i>
+                    <h5 class="card-title mt-3">Agendar Cita Nutrición</h5>
+                    <p class="card-text text-muted">Programar sesiones personalizadas con nutricionistas.</p>
+                    <hr>
+                    <span class="badge bg-success">Servicio de Nutrición</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card shadow-sm border-primary widget-card" data-bs-toggle="modal" data-bs-target="#modalMasaje">
+                <div class="card-body text-center">
+                    <i class="bi bi-person-hearts display-4 text-primary"></i>
+                    <h5 class="card-title mt-3">Reservar Masaje Terapéutico</h5>
+                    <p class="card-text text-muted">Gestión de turnos para masajes del servicio de Spa.</p>
+                    <hr>
+                    <span class="badge bg-primary">Servicio de Spa</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card shadow-sm border-info widget-card" data-bs-toggle="modal" data-bs-target="#modalSauna">
+                <div class="card-body text-center">
+                    <i class="bi bi-thermometer-sun display-4 text-info"></i>
+                    <h5 class="card-title mt-3">Reservar Acceso a Sauna</h5>
+                    <p class="card-text text-muted">Administración de horarios y capacidad para el área de sauna.</p>
+                    <hr>
+                    <span class="badge bg-info">Capacidad Limitada</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card shadow-sm border-danger widget-card" data-bs-toggle="modal" data-bs-target="#modalConsultaCita">
+                <div class="card-body text-center">
+                    <i class="bi bi-x-octagon-fill display-4 text-danger"></i>
+                    <h5 class="card-title mt-3">Consultar/Cancelar Cita</h5>
+                    <p class="card-text text-muted">Buscar citas programadas filtrando por Cédula del Miembro.</p>
+                    <hr>
+                    <span class="badge bg-danger">Filtro por Cédula</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div class="modal fade" id="modalNutricion" tabindex="-1" aria-labelledby="modalNutricionLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalNutricionLabel"><i class="bi bi-apple"></i> Agendar Cita con Nutricionista</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formNutricion">
+                    <div class="mb-3">
+                        <label for="cedulaMiembroNutricion" class="form-label">Cédula del Miembro</label>
+                        <input type="text" class="form-control" id="cedulaMiembroNutricion" placeholder="Ingrese cédula" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="fechaCitaNutricion" class="form-label">Fecha de Cita</label>
+                        <input type="date" class="form-control" id="fechaCitaNutricion" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="horaCitaNutricion" class="form-label">Hora de Cita</label>
+                        <input type="time" class="form-control" id="horaCitaNutricion" required>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success">Confirmar Reserva</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalMasaje" tabindex="-1" aria-labelledby="modalMasajeLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalMasajeLabel"><i class="bi bi-person-hearts"></i> Agendar Masaje Terapéutico</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formMasaje">
+                    <div class="mb-3">
+                        <label for="cedulaMiembroMasaje" class="form-label">Cédula del Miembro</label>
+                        <input type="text" class="form-control" id="cedulaMiembroMasaje" placeholder="Ingrese cédula" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="fechaMasaje" class="form-label">Fecha</label>
+                        <input type="date" class="form-control" id="fechaMasaje" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="horaMasaje" class="form-label">Hora</label>
+                        <input type="time" class="form-control" id="horaMasaje" required>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Confirmar Reserva</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalSauna" tabindex="-1" aria-labelledby="modalSaunaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalSaunaLabel"><i class="bi bi-thermometer-sun"></i> Reservar Acceso a Sauna</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formSauna">
+                    <div class="mb-3">
+                        <label for="cedulaMiembroSauna" class="form-label">Cédula del Miembro</label>
+                        <input type="text" class="form-control" id="cedulaMiembroSauna" placeholder="Ingrese cédula" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="fechaSauna" class="form-label">Fecha de Acceso</label>
+                        <input type="date" class="form-control" id="fechaSauna" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="horaSauna" class="form-label">Hora de Inicio</label>
+                        <input type="time" class="form-control" id="horaSauna" required>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-info text-white">Confirmar Reserva</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalConsultaCita" tabindex="-1" aria-labelledby="modalConsultaCitaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalConsultaCitaLabel"><i class="bi bi-search"></i> Consultar/Cancelar Citas por Miembro</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formFiltroCedula">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="cedulaBusqueda" placeholder="Ingrese Cédula del Miembro" required>
+                        <button class="btn btn-danger" type="submit"><i class="bi bi-funnel-fill"></i> Buscar Citas</button>
+                    </div>
+                </form>
+                <hr>
+                <div id="resultadoBusqueda" class="mt-4">
+                    <p class="text-center text-muted">Ingrese una cédula para buscar las citas programadas.</p>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th><i class="bi bi-tag"></i> Tipo de Servicio</th>
+                                    <th><i class="bi bi-calendar3"></i> Fecha</th>
+                                    <th><i class="bi bi-clock"></i> Hora</th>
+                                    <th><i class="bi bi-flag"></i> Estado</th>
+                                    <th><i class="bi bi-tools"></i> Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaCitas">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">Sin resultados</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <nav aria-label="Paginación de citas">
+                        <ul class="pagination" id="paginacion"></ul>
+                    </nav>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 {% include 'footer.html' %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
+<script>
+    const RESERVA_ENDPOINT = '/api/reservar_cita';
+    const CONSULTA_ENDPOINT = '/api/consultar_citas_por_cedula';
+    const CANCELACION_ENDPOINT = '/api/cancelar_cita';
+
+    let cedulaActual = '';
+    let paginaActual = 1;
+
+    async function enviarDatosReserva(datosCita, formId, modalId) {
+        const modalElement = document.getElementById(modalId);
+        const formElement = document.getElementById(formId);
+
+        try {
+            const response = await fetch(RESERVA_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(datosCita)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(`✅ Cita de ${datosCita.tipo_servicio} confirmada. ID: ${data.id_cita}`);
+                bootstrap.Modal.getInstance(modalElement).hide();
+                formElement.reset();
+            } else {
+                alert(`❌ Error al reservar: ${data.mensaje || 'Respuesta inesperada del servidor.'}`);
+                console.error('Detalles del error:', data.detalles || data.mensaje);
+            }
+        } catch (error) {
+            alert('🚨 Error de conexión al servidor. Asegúrese de que el backend esté corriendo.');
+            console.error('Fetch error:', error);
+        }
+    }
+
+    document.getElementById('formNutricion').addEventListener('submit', async function(event) {
+        event.preventDefault();
+
+        const datosCita = {
+            cedula: document.getElementById('cedulaMiembroNutricion').value.trim(), 
+            tipo_servicio: 'Nutrición',
+            fecha: document.getElementById('fechaCitaNutricion').value,
+            hora: document.getElementById('horaCitaNutricion').value + ':00'
+        };
+
+        enviarDatosReserva(datosCita, 'formNutricion', 'modalNutricion');
+    });
+
+    document.getElementById('formMasaje').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        const datosCita = {
+            cedula: document.getElementById('cedulaMiembroMasaje').value.trim(), 
+            tipo_servicio: 'Masaje',
+            fecha: document.getElementById('fechaMasaje').value,
+            hora: document.getElementById('horaMasaje').value + ':00'
+        };
+
+        enviarDatosReserva(datosCita, 'formMasaje', 'modalMasaje');
+    });
+    
+    document.getElementById('formSauna').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        const datosCita = {
+            cedula: document.getElementById('cedulaMiembroSauna').value.trim(), 
+            tipo_servicio: 'Sauna',
+            fecha: document.getElementById('fechaSauna').value,
+            hora: document.getElementById('horaSauna').value + ':00'
+        };
+
+        enviarDatosReserva(datosCita, 'formSauna', 'modalSauna');
+    });
+
+    document.getElementById('formFiltroCedula').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        cedulaActual = document.getElementById('cedulaBusqueda').value.trim();
+        paginaActual = 1;
+        await buscarCitas(cedulaActual, paginaActual);
+    });
+
+    async function buscarCitas(cedula, pagina) {
+        let tablaCitas = document.getElementById('tablaCitas');
+        tablaCitas.innerHTML = `<tr><td colspan="5" class="text-center"><div class="spinner-border text-danger" role="status"></div><p class="mt-2">Buscando citas...</p></td></tr>`;
+        document.getElementById('paginacion').innerHTML = '';
+
+        try {
+            const response = await fetch(CONSULTA_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cedula: cedula, page: pagina })
+            });
+
+            const data = await response.json();
+            console.log('Respuesta del servidor:', data);
+            
+            tablaCitas.innerHTML = '';
+
+            if (response.ok && data.citas && Array.isArray(data.citas) && data.citas.length > 0) {
+                data.citas.forEach(cita => {
+                    const row = tablaCitas.insertRow();
+                    
+                    const cellServicio = row.insertCell();
+                    let badgeColor = 'secondary';
+                    let icono = 'calendar-check';
+                    if (cita.tipo_servicio === 'Nutrición') {
+                        badgeColor = 'success';
+                        icono = 'apple';
+                    } else if (cita.tipo_servicio === 'Masaje') {
+                        badgeColor = 'primary';
+                        icono = 'person-hearts';
+                    } else if (cita.tipo_servicio === 'Sauna') {
+                        badgeColor = 'info';
+                        icono = 'thermometer-sun';
+                    }
+                    cellServicio.innerHTML = `<i class="bi bi-${icono}"></i> <span class="badge bg-${badgeColor}">${cita.tipo_servicio}</span>`;
+                    
+                    row.insertCell().textContent = cita.fecha;
+                    row.insertCell().textContent = cita.hora.substring(0, 5);
+                    
+                    const cellEstado = row.insertCell();
+                    const estadoColor = cita.estado === 'Reservada' ? 'success' : 'secondary';
+                    cellEstado.innerHTML = `<span class="badge bg-${estadoColor}">${cita.estado}</span>`;
+                    
+                    const cellAccion = row.insertCell();
+                    cellAccion.innerHTML = `<button class="btn btn-sm btn-outline-danger" onclick="cancelarCita('${cita.id_cita}')"><i class="bi bi-trash"></i> Cancelar</button>`;
+                });
+
+                renderizarPaginacion(data.pagina_actual, data.total_paginas);
+            } else {
+                tablaCitas.innerHTML = `<tr><td colspan="5" class="text-center text-muted"><i class="bi bi-info-circle"></i> ${data.mensaje || 'No se encontraron citas activas para esta cédula.'}</td></tr>`;
+            }
+
+        } catch (error) {
+            tablaCitas.innerHTML = `<tr><td colspan="5" class="text-center text-danger"><i class="bi bi-x-circle"></i> Error de conexión al servidor.</td></tr>`;
+            console.error('Fetch error:', error);
+        }
+    }
+
+    function renderizarPaginacion(paginaActual, totalPaginas) {
+        const paginacion = document.getElementById('paginacion');
+        paginacion.innerHTML = '';
+
+        if (totalPaginas <= 1) return;
+
+        const liPrev = document.createElement('li');
+        liPrev.className = `page-item ${paginaActual === 1 ? 'disabled' : ''}`;
+        liPrev.innerHTML = `<a class="page-link" href="#" onclick="event.preventDefault(); ${paginaActual > 1 ? `cambiarPagina(${paginaActual - 1})` : ''}">Anterior</a>`;
+        paginacion.appendChild(liPrev);
+
+        for (let i = 1; i <= totalPaginas; i++) {
+            const li = document.createElement('li');
+            li.className = `page-item ${i === paginaActual ? 'active' : ''}`;
+            li.innerHTML = `<a class="page-link" href="#" onclick="event.preventDefault(); cambiarPagina(${i})">${i}</a>`;
+            paginacion.appendChild(li);
+        }
+
+        const liNext = document.createElement('li');
+        liNext.className = `page-item ${paginaActual === totalPaginas ? 'disabled' : ''}`;
+        liNext.innerHTML = `<a class="page-link" href="#" onclick="event.preventDefault(); ${paginaActual < totalPaginas ? `cambiarPagina(${paginaActual + 1})` : ''}">Siguiente</a>`;
+        paginacion.appendChild(liNext);
+    }
+
+    async function cambiarPagina(pagina) {
+        paginaActual = pagina;
+        await buscarCitas(cedulaActual, paginaActual);
+    }
+
+    async function cancelarCita(idCita) {
+        if (!window.confirm(`¿Está seguro de cancelar esta cita?\n\nID: ${idCita}\n\nEsta acción no se puede deshacer.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(CANCELACION_ENDPOINT, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_cita: idCita })
+            });
+            
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(`✅ ${data.mensaje}`);
+                await buscarCitas(cedulaActual, paginaActual);
+            } else {
+                alert(`❌ Error al cancelar: ${data.mensaje || 'Error desconocido.'}`);
+                console.error('Detalles del error:', data.detalles || data.mensaje);
+            }
+        } catch (error) {
+            alert('🚨 Error de conexión al servidor al intentar cancelar.');
+            console.error('Fetch error:', error);
+        }
+    }
+</script>
 </body>
 </html>

@@ -67,14 +67,32 @@ document.getElementById("calificacionesTexto").textContent=`Promedio: ${promedio
 }
 async function crearPlan(){
 const id=document.getElementById("selectMiembro").value;
-if(!id) return;
+const descripcion=document.getElementById("planObjetivo").value.trim();
+const semanas=document.getElementById("planSemanas").value;
+const frecuencia=document.getElementById("planFrecuencia").value;
+if (!id) {
+    alert("🚨 Por favor, selecciona un miembro.");
+    return;
+}
+if (!descripcion) {
+    alert("📝 El objetivo del plan es obligatorio.");
+    return;
+}
+if (!semanas || isNaN(Number(semanas)) || Number(semanas) <= 0 || !Number.isInteger(Number(semanas))) {
+    alert("⏳ La duración en semanas debe ser un número entero positivo.");
+    return;
+}
+if (!frecuencia || isNaN(Number(frecuencia)) || Number(frecuencia) <= 0 || !Number.isInteger(Number(frecuencia))) {
+    alert("🗓️ La frecuencia de sesiones debe ser un número entero positivo.");
+    return;
+}
 let idEntrenador=rolActual==='entrenador'?idUsuarioActual:null;
 const body={
 id_miembro:id,
 id_entrenador:idEntrenador,
-descripcion:document.getElementById("planObjetivo").value,
-duracion_semanas: document.getElementById("planSemanas").value ? Number(document.getElementById("planSemanas").value) : null,
-sesiones_semana: document.getElementById("planFrecuencia").value ? Number(document.getElementById("planFrecuencia").value) : null,
+descripcion:descripcion,
+duracion_semanas: Number(semanas),
+sesiones_semana: Number(frecuencia),
 nivel: document.getElementById("planCategoria").value
 };
 if(editPlanId){
@@ -134,9 +152,28 @@ document.getElementById("btnCrearPlan").textContent="Guardar Cambios";
 }
 async function registrarSeguimiento(){
 const id=document.getElementById("selectMiembro").value;
-if(!id) return;
+const peso=document.getElementById("peso").value;
+const grasa=document.getElementById("grasa").value;
+const musculo=document.getElementById("musculo").value;
+const notas=document.getElementById("notasPrivadas").value.trim();
+if (!id) {
+    alert("🚨 Por favor, selecciona un miembro.");
+    return;
+}
+const validarMetrica = (valor, nombre, minimo = 0.1) => {
+    if (!valor || isNaN(Number(valor)) || Number(valor) < minimo) {
+        alert(`🔢 El valor de ${nombre} es obligatorio y debe ser un número positivo (mínimo ${minimo}).`);
+        return false;
+    }
+    return true;
+};
+if (!validarMetrica(peso, "Peso", 0.1) || 
+    !validarMetrica(grasa, "Grasa Corporal", 0) ||
+    !validarMetrica(musculo, "Masa Muscular", 0)) {
+    return;
+}
 let idEntrenador=rolActual==='entrenador'?idUsuarioActual:null;
-const body={id_miembro:id,id_entrenador:idEntrenador,peso:Number(document.getElementById("peso").value),grasa_corporal:Number(document.getElementById("grasa").value),masa_muscular:Number(document.getElementById("musculo").value),notas:document.getElementById("notasPrivadas").value};
+const body={id_miembro:id,id_entrenador:idEntrenador,peso:Number(peso),grasa_corporal:Number(grasa),masa_muscular:Number(musculo),notas:notas};
 let actualizarGrafica=false;
 if(editSeguimientoId){
 const registro=seguimientoData.find(x=>x.id_progreso===editSeguimientoId);
@@ -222,8 +259,16 @@ await cargarSeguimiento(document.getElementById("selectMiembro").value,true);
 }
 async function guardarRiesgos(){
 const id=document.getElementById("selectMiembro").value;
-if(!id) return;
-await fetch(apiRiesgos,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id_miembro:id,nota:document.getElementById("riesgosSalud").value})});
+const nota=document.getElementById("riesgosSalud").value.trim();
+if (!id) {
+    alert("🚨 Por favor, selecciona un miembro.");
+    return;
+}
+if (!nota) {
+    alert("⚠️ Por favor, ingresa una nota de riesgo de salud.");
+    return;
+}
+await fetch(apiRiesgos,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id_miembro:id,nota:nota})});
 await cargarRiesgos(id);
 document.getElementById("riesgosSalud").value="";
 }
@@ -267,11 +312,20 @@ await cargarRiesgos(document.getElementById("selectMiembro").value);
 }
 async function crearFeedback(){
 const id=document.getElementById("selectMiembro").value;
-if(!id) return;
 let idEntrenador=rolActual==='entrenador'?idUsuarioActual:null;
-const mensaje=document.getElementById("feedbackMensaje").value;
-if(!mensaje || !mensaje.trim()) return;
-if(estrellaSeleccionada<1) return;
+const mensaje=document.getElementById("feedbackMensaje").value.trim();
+if(!id) {
+    alert("🚨 Por favor, selecciona un miembro.");
+    return;
+}
+if(!mensaje) {
+    alert("💬 El mensaje de feedback es obligatorio.");
+    return;
+}
+if(estrellaSeleccionada<1) {
+    alert("⭐ Por favor, asigna una calificación de 1 a 5 estrellas.");
+    return;
+}
 const payload={id_miembro:id,id_entrenador:idEntrenador,mensaje:mensaje,calificacion:estrellaSeleccionada};
 await fetch(apiFeedback,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
 document.getElementById("feedbackMensaje").value="";estrellaSeleccionada=0;actualizarEstrellas("#feedbackStars",0);
@@ -303,8 +357,15 @@ new bootstrap.Modal(document.getElementById("modalFeedback")).show();
 }
 async function guardarEdicionFeedback(){
 if(!editFeedbackId) return;
-const nuevoMensaje=document.getElementById("modalFeedbackMensaje").value;
-if(!nuevoMensaje || !nuevoMensaje.trim()) return;
+const nuevoMensaje=document.getElementById("modalFeedbackMensaje").value.trim();
+if(!nuevoMensaje) {
+    alert("💬 El mensaje de feedback no puede estar vacío.");
+    return;
+}
+if(estrellaModalSeleccionada<1) {
+    alert("⭐ Por favor, asigna una calificación de 1 a 5 estrellas.");
+    return;
+}
 const payload={mensaje:nuevoMensaje,calificacion:estrellaModalSeleccionada};
 await fetch(`${apiFeedback}/${editFeedbackId}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
 editFeedbackId=null;

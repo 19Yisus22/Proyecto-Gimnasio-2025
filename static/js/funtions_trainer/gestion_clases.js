@@ -188,12 +188,9 @@ const tipo = document.getElementById("modalInputTipo").value
 const hora = document.getElementById("modalInputHora").value
 if(!titulo || !selectedMiembro) return
     
-// Obtener el mes y año actual. selectedDia ya está establecido al abrir el modal.
 const now = new Date()
 const currentYear = now.getFullYear()
-const currentMonth = now.getMonth() + 1 // Los meses son 0-indexados
-    
-// Formatear la fecha para enviarla a la API
+const currentMonth = now.getMonth() + 1 
 const fecha = `${currentYear}-${String(currentMonth).padStart(2,"0")}-${String(selectedDia).padStart(2,"0")}`
 
 if(selectedRecordatorio){
@@ -395,7 +392,7 @@ cont.innerHTML="";
 data.forEach(n => {
 const item = document.createElement("div");
 item.className = "list-group-item list-group-item-dark d-flex justify-content-between align-items-center";
-const imgSrc = n.imagen_url || iconPath;
+const imgSrc = '<img src="${static url_for("static", filename="uploads/icon.png")}"';
 item.innerHTML = `
 <div style="display:flex; align-items:center; gap:10px;">
 <img src="${imgSrc}" style="width:50px; height:50px; object-fit:cover; border-radius:6px;">

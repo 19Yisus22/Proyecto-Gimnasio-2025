@@ -1,0 +1,206 @@
+html, body {height:100%; margin:0; padding:0;}
+body {
+    background: linear-gradient(135deg, #3e226f, #5a2ea6);
+    color: #fff;
+    font-family: 'Arial', sans-serif;
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+    scroll-behavior: smooth;
+}
+
+.container, .container-central {
+    max-width: 1590px;
+    width: 100%;
+    margin: 0 auto;
+    display:flex;
+    flex-direction:column;
+    gap:1.5rem;
+}
+.card-title-center {
+    width: 100%;
+    padding: 2rem 3rem;
+    background: #2c0d46;
+    border-radius: 25px;
+    box-shadow: 0 12px 35px rgba(0,0,0,0.6);
+    text-align: center;
+    font-size: 2rem;
+    font-weight: bold;
+    color: #fff;
+}
+.card-header, .modal-body, .modal-footer {
+    color: black;
+}
+.card-header h5, 
+.modal-body label,
+.modal-body .fw-bold,
+.list-group-item {
+    color: black !important;
+}
+.card {
+    border:none;
+    border-radius:15px;
+    box-shadow:0 8px 25px rgba(0,0,0,0.5);
+    background: rgba(47, 47, 47, 0.85);
+    padding:2rem;
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
+    animation: slideIn 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+.card:hover {transform:translateY(-5px); box-shadow:0 12px 30px rgba(0,0,0,0.6);}
+
+.card h5, h2 {color:#fff;}
+
+@keyframes slideIn {0%{transform:translateY(-50px);opacity:0;}100%{transform:translateY(0);opacity:1;}}
+
+h2,h5,h6,label,span {color:#fff;}
+
+input.form-control, textarea.form-control, select.form-select {
+    background: linear-gradient(135deg, #e0c3fc, #8ec5fc);
+    color:#000;
+    border:1px solid #ccc;
+    transition: all 0.3s ease;
+    border-radius:10px;
+}
+input.form-control::placeholder, textarea.form-control::placeholder {color:#555;}
+input.form-control:focus, textarea.form-control:focus, select.form-select:focus {
+    border-color:#d354ff;
+    box-shadow:0 0 12px rgba(142,197,252,0.6);
+    color:#000;
+}
+
+button.btn-primary, button.btn-outline-secondary, button.btn-success, button.btn-sm, button.btn-outline-danger {
+    color:#fff;
+    border:none;
+    border-radius:12px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.3);
+    transition: all 0.3s ease;
+}
+
+button.btn-primary {
+    background: linear-gradient(135deg, #7f5af0, #d76cf8);
+}
+button.btn-primary:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow:0 6px 20px rgba(142,197,252,0.5);
+    background: linear-gradient(135deg, #9f7cf0, #e6a0ff);
+}
+
+button.btn-outline-secondary {
+    background: linear-gradient(135deg, #00c6ff, #0072ff);
+}
+button.btn-outline-secondary:hover {
+    transform:translateY(-2px);
+    background: linear-gradient(135deg, #66d9ff, #3399ff);
+}
+
+button.btn-success {
+    background: linear-gradient(135deg, #28a745, #85e085);
+}
+button.btn-success:hover {
+    transform:translateY(-2px);
+}
+
+button.btn-outline-danger {
+    background: linear-gradient(135deg, #ff3b3b, #cc0000);
+}
+button.btn-outline-danger:hover {
+    transform:translateY(-2px);
+}
+
+textarea.form-control {resize:none;}
+
+#chatNutri {
+    height: 300px;
+    overflow-y: auto;
+    background: rgba(255,255,255,0.08);
+    padding: 10px;
+    border-radius: 10px;
+    display:flex;
+    flex-direction:column;
+}
+
+.msg {
+    margin-bottom:10px;
+    max-width:75%;
+    display:flex;
+    flex-direction:column;
+}
+
+.msg-miembro {
+    align-self:flex-start;
+    background:#fff;
+    color:#000;
+    padding:10px 14px;
+    border-radius:12px 12px 12px 4px;
+}
+
+.msg-nutricionista {
+    align-self:flex-end;
+    background:#7f5af0;
+    color:#fff;
+    padding:10px 14px;
+    border-radius:12px 12px 4px 12px;
+}
+
+.msg .meta {
+    font-size:.7rem;
+    opacity:0.8;
+}
+
+#searchResults {
+    max-height: 200px;
+    overflow-y:auto;
+    background: rgba(0,0,0,0.2);
+    border-radius:10px;
+}
+
+.member-item {
+    cursor:pointer;
+    padding:10px;
+    border-bottom:1px solid rgba(255,255,255,0.1);
+    color:#fff;
+}
+.member-item:hover {
+    background:rgba(255,255,255,0.1);
+}
+
+.plan-card {
+    border-left:4px solid #d76cf8;
+    padding:15px;
+    margin-bottom:12px;
+    background:rgba(255,255,255,0.05);
+    border-radius:10px;
+}
+
+.plan-info {font-size:0.9rem;}
+
+.ingesta-item {
+    padding:10px;
+    border-bottom:1px solid rgba(255,255,255,0.12);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    color:#fff;
+}
+.ingesta-item:hover {
+    background:rgba(255,255,255,0.05);
+}
+
+#listaIngesta, #listaProgreso {
+    background:rgba(0,0,0,0.2);
+    padding:10px;
+    border-radius:12px;
+}
+
+.modal-content {
+    border-radius:12px;
+    background: rgba(47,47,47,0.95);
+    color:#fff;
+    padding:10px;
+}
+.modal-header, .modal-footer {
+    border:none;
+    background:transparent;
+}
+.modal-body input.form-control {margin-bottom:10px;}
+.toast-notificacion {background:rgba(0,0,0,0.7);}

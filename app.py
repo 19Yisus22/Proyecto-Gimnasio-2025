@@ -1,11 +1,13 @@
 from flask_cors import CORS
 import json
+import re
 from datetime import datetime
 from dotenv import load_dotenv
 from passlib.hash import scrypt
 from supabase import create_client
 from datetime import datetime, timezone 
 from werkzeug.utils import secure_filename
+from datetime import datetime, date, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
 import os, uuid, secrets, cloudinary, cloudinary.uploader, json
 from werkzeug.security import check_password_hash as werkzeug_check
@@ -1236,6 +1238,231 @@ def instructor_obtener_calificaciones_clases(id_instructor):
     except Exception as e:
         return jsonify({"error": "Ocurrió un error al obtener las calificaciones."}), 500 
 
+# MODULO PROGRESO MIEMBROS
+
+    @app.route("/api/entrenador/cargarDashboardStats", methods=["GET"])
+    def cargar_dashboard_stats():
+        """
+        Carga las cuatro estadísticas principales del dashboard.
+        1. Total de Miembros (rol 'miembro') - Usa id_rol para el filtro.
+        2. Total de Metas Alcanzadas.
+        3. Total de Asistencia Confirmada.
+        4. Total de Calorías Quemadas.
+        """
+        try:
+            # 1. Obtener el ID del rol 'miembro'
+            # Usamos .limit(1) y .maybe_single() para mayor seguridad si hubiera duplicados
+            res_rol = supabase.from_('roles').select('id_rol').eq('nombre', 'miembro').limit(1).maybe_single().execute()
+            id_rol_miembro = res_rol.data.get('id_rol') if res_rol.data else None
+
+            total_miembros = 0
+            if id_rol_miembro:
+                # 1. Total Miembros (rol 'miembro')
+                # Consulta simple filtrando solo por id_rol para evitar errores de alias/join
+                res_miembros = supabase.from_('usuarios').select(
+                    'id_usuario', 
+                    count='exact'
+                ).eq('id_rol', id_rol_miembro).execute()
+                total_miembros = res_miembros.count if res_miembros.count is not None else 0
+
+            # 2. Metas Alcanzadas (m_objetivos donde estado='cumplido')
+            res_metas = supabase.from_('m_objetivos').select(
+                'id_objetivo', 
+                count='exact'
+            ).eq('estado', 'cumplido').execute()
+            metas_cumplidas = res_metas.count if res_metas.count is not None else 0
+
+            # 3. Asistencia Confirmada (m_clases_reservadas donde asistencia_confirmada=TRUE)
+            res_asistencia = supabase.from_('m_clases_reservadas').select(
+                'id_reserva', 
+                count='exact'
+            ).eq('asistencia_confirmada', True).execute()
+            asistencia_confirmada = res_asistencia.count if res_asistencia.count is not None else 0
+
+            # 4. Total Calorías Quemadas (Suma de calorias_quemadas en m_progreso)
+            res_calorias = supabase.from_('m_progreso').select('calorias_quemadas').execute()
+            total_calorias = sum(p.get('calorias_quemadas') or 0 for p in res_calorias.data)
+            
+            return jsonify({
+                "ok": True,
+                "stats": {
+                    "totalMiembros": total_miembros,
+                    "metasAlcanzadas": metas_cumplidas,
+                    "asistenciaConfirmada": asistencia_confirmada,
+                    "caloriasTotales": total_calorias
+                }
+            })
+
+        except Exception as e:
+            print(f"Error al cargar estadísticas del dashboard: {e}")
+            return jsonify({"ok": False, "mensaje": f"Error interno al obtener estadísticas: {str(e)}"}), 500
+
+
+    @app.route("/api/entrenador/cargarMiembros", methods=["GET"])
+    def cargar_miembros():
+        """
+        Carga la lista de todos los usuarios con rol 'miembro'.
+        CORRECCIÓN: Asegura que la consulta principal solo filtre por id_rol.
+        """
+        try:
+            # Paso 1: Obtener el ID del rol 'miembro'
+            res_rol = supabase.from_('roles').select('id_rol').eq('nombre', 'miembro').limit(1).maybe_single().execute()
+            id_rol_miembro = res_rol.data.get('id_rol') if res_rol.data else None
+
+            if not id_rol_miembro:
+                # Si no se encuentra el rol, asumimos que no hay miembros (o la tabla roles está mal)
+                return jsonify({"ok": True, "miembros": [], "mensaje": "No se encontró el ID para el rol 'miembro'. Asegure que la tabla 'roles' contiene un rol con nombre 'miembro'."})
+
+            # Paso 2: Consulta principal de usuarios, filtrando solo por id_rol
+            # SIN intentar hacer joins implícitos en el SELECT para evitar el error de alias
+            res_members = supabase.from_('usuarios').select(
+                'id_usuario, nombre, disciplina, id_entrenador'
+            ).eq('id_rol', id_rol_miembro).execute()
+            
+            miembros_data = []
+            if res_members.data:
+                for member in res_members.data:
+                    member_id = member['id_usuario']
+                    trainer_id = member.get('id_entrenador')
+                    trainer_name = None
+                    
+                    # Paso 3: Consulta secundaria para el nombre del entrenador (si aplica)
+                    if trainer_id:
+                        # Asumo que los entrenadores también son usuarios
+                        res_trainer = supabase.from_('usuarios').select('nombre').eq('id_usuario', trainer_id).limit(1).maybe_single().execute()
+                        if res_trainer.data:
+                            trainer_name = res_trainer.data.get('nombre')
+                    
+                    # Paso 4: Fetch the latest membership status (m_membresias)
+                    res_membership = supabase.from_('m_membresias').select('estado, fecha_fin').eq('id_miembro', member_id).order('fecha_fin', desc=True).limit(1).execute()
+                    latest_membership = res_membership.data[0] if res_membership.data else {}
+                    
+                    # Paso 5: Fetch the latest progress data (m_progreso)
+                    res_progress = supabase.from_('m_progreso').select('*').eq('id_miembro', member_id).order('fecha', desc=True).limit(1).execute()
+                    latest_progress = res_progress.data[0] if res_progress.data else {}
+                    
+                    
+                    # Paso 6: Ensambla la estructura de datos
+                    miembro_info = {
+                        'id': member_id, 
+                        'nombre': member['nombre'],
+                        'disciplina': member.get('disciplina'),
+                        'entrenador': trainer_name,
+                        
+                        # Datos de la Membresía - Usar get() para valores por defecto seguros
+                        'estado_membresia': latest_membership.get('estado', 'Sin Registrar'),
+                        'fecha_fin': latest_membership.get('fecha_fin'), 
+                        
+                        # Métricas del último registro en m_progreso
+                        'peso': latest_progress.get('peso'),
+                        'imc': latest_progress.get('imc'),
+                        'calorias_quemadas': latest_progress.get('calorias_quemadas'),
+                        'objetivo_personal': latest_progress.get('objetivo_personal'),
+                        'ultima_sesion': latest_progress.get('fecha'),
+                    }
+                    miembros_data.append(miembro_info)
+
+            return jsonify({"ok": True, "miembros": miembros_data})
+
+        except Exception as e:
+            print(f"Error al cargar miembros: {e}")
+            # Retornamos el error completo para facilitar la depuración por parte del usuario
+            return jsonify({"ok": False, "mensaje": f"Error interno del servidor al obtener la lista de miembros: {str(e)}"}), 500
+
+    @app.route("/api/entrenador/registrarMetricas", methods=["POST"])
+    def registrar_metricas():
+        """
+        Registra nuevas métricas de progreso en la tabla m_progreso.
+        """
+        try:
+            data = request.json
+            
+            required_fields = ['id_miembro', 'peso', 'calorias_quemadas']
+            if not all(field in data for field in required_fields):
+                return jsonify({"ok": False, "mensaje": "Faltan campos obligatorios."}), 400
+
+            metricas = {
+                'id_miembro': data.get('id_miembro'), # id_miembro debe ser el id_usuario
+                'peso': float(data.get('peso')),
+                'imc': float(data.get('imc')) if data.get('imc') else None,
+                'calorias_quemadas': int(data.get('calorias_quemadas', 0)),
+                'fuerza': float(data.get('fuerza')) if data.get('fuerza') else None,
+                'resistencia': float(data.get('resistencia')) if data.get('resistencia') else None,
+                'masa_muscular': float(data.get('masa_muscular')) if data.get('masa_muscular') else None,
+                'grasa_corporal': float(data.get('grasa_corporal')) if data.get('grasa_corporal') else None,
+                'notas': data.get('notas'),
+                'objetivo_personal': data.get('objetivo_personal'),
+                'fecha': datetime.now(timezone.utc).isoformat()
+            }
+            
+            res = supabase.from_('m_progreso').insert([metricas]).execute()
+            
+            if res.data:
+                return jsonify({"ok": True, "mensaje": "Métricas registradas exitosamente."})
+            else:
+                error_message = res.error.get('message', 'Error desconocido al registrar métricas.') if res.error else 'No data returned on insertion.'
+                print(f"Supabase Error: {error_message}")
+                return jsonify({"ok": False, "mensaje": error_message}), 500
+            
+        except ValueError:
+            return jsonify({"ok": False, "mensaje": "Error de formato en los datos numéricos o nulos."}), 400
+        except Exception as e:
+            print(f"Error al registrar métricas: {e}")
+            return jsonify({"ok": False, "mensaje": "Error interno del servidor al registrar métricas."}), 500
+
+    @app.route("/api/entrenador/cargarDetalle/<id_miembro>", methods=["GET"])
+    def cargar_detalle(id_miembro):
+        """
+        Carga el historial completo de métricas de progreso para un miembro específico.
+        (id_miembro es el id_usuario en este contexto)
+        """
+        try:
+            res = supabase.from_('m_progreso').select('*').eq('id_miembro', id_miembro).order('fecha', desc=False).execute()
+            
+            if res.data:
+                historial = res.data
+                for entry in historial:
+                    # Formatea la fecha para mejor visualización en el frontend
+                    if entry.get('fecha'):
+                        # Asume que la fecha es ISO 8601 UTC y la formatea
+                        entry['fecha'] = datetime.fromisoformat(entry['fecha'].replace('Z', '+00:00')).strftime('%Y-%m-%d')
+
+                return jsonify({"ok": True, "historial": historial})
+            
+            return jsonify({"ok": False, "mensaje": "No se encontró historial para el miembro."}), 404
+
+        except Exception as e:
+            print(f"Error al cargar detalle: {e}")
+            return jsonify({"ok": False, "mensaje": "Error interno del servidor al obtener el historial."}), 500
+
+    @app.route("/api/entrenador/cargarEntrenadores", methods=["GET"])
+    def cargar_entrenadores():
+        """
+        Carga la lista de todos los entrenadores/staff.
+        Filtra por el rol 'entrenador'.
+        """
+        try:
+            # Paso 1: Obtener el ID del rol 'entrenador'
+            res_rol = supabase.from_('roles').select('id_rol').eq('nombre', 'entrenador').limit(1).maybe_single().execute()
+            id_rol_entrenador = res_rol.data.get('id_rol') if res_rol.data else None
+            
+            if not id_rol_entrenador:
+                return jsonify({"ok": True, "entrenadores": [], "mensaje": "Rol 'entrenador' no encontrado."})
+
+
+            # Paso 2: Consulta de usuarios con rol 'entrenador'
+            res = supabase.from_('usuarios').select('id_usuario, nombre').eq('id_rol', id_rol_entrenador).execute()
+            
+            # Mapea los resultados para que el frontend los reciba como {id: ..., nombre: ...}
+            entrenadores_list = [{"id": e['id_usuario'], "nombre": e['nombre']} for e in res.data]
+            
+            return jsonify({"ok": True, "entrenadores": entrenadores_list})
+
+        except Exception as e:
+            print(f"Error al cargar entrenadores: {e}")
+            return jsonify({"ok": False, "mensaje": "Error interno del servidor al obtener entrenadores."}), 500
+
+
 # FIN MODULO - ENTRENADOR
 
 
@@ -1937,17 +2164,22 @@ def n_sesiones_progreso_eliminar(id_sesion):
 # FUNCIONES APARTADO CHAT/FEEDBACK / MODULO PLAN NUTRICIONAL - NUTRICIONISTA
 
 @app.route("/api/nutricionista/n_chat_nutricion", methods=["POST"])
-def n_chat_nutricion_crear():
+def n_chat_nutricion_enviar_nutricionista():
     try:
         data = request.json
+        
         insert_data = {
             "id_miembro": data.get("id_miembro"),
             "id_nutricionista": data.get("id_nutricionista"),
             "mensaje": data.get("mensaje"),
-            "remitente": data.get("remitente")
         }
+        
+        if not all(insert_data.values()):
+             return jsonify({"error": "Faltan campos requeridos: 'id_miembro', 'id_nutricionista' y 'mensaje' son obligatorios."}), 400
+
         res = supabase.table("n_chat_nutricion").insert(insert_data).execute()
-        return jsonify(res.data), 200
+        
+        return jsonify(res.data), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -2014,7 +2246,148 @@ def n_progreso_listar(id_miembro):
     res = supabase.table("n_progreso_miembro").select("*").eq("id_miembro", id_miembro).order("fecha", desc=True).execute()
     return jsonify(res.data)
 
-# INDEX SIN USAR
+# OTRO
+
+@app.route("/api/nutricionista/perfil/buscar", methods=["GET"])
+def api_nutricionista_perfil_buscar():
+    q = request.args.get('q', '').lower()
+    if not q:
+        return jsonify({"items": []})
+
+    
+    search_results = supabase.table("usuarios").select("id_usuario, nombre, correo").or_(f"nombre.ilike.%{q}%, correo.ilike.%{q}%").execute()
+
+    items = [{"id": u["id_usuario"], "nombre": u["nombre"], "correo": u["correo"]} for u in search_results.data]
+    return jsonify({"items": items})
+
+@app.route("/api/nutricionista/perfil/get/<id_miembro>", methods=["GET"])
+def api_nutricionista_perfil_get(id_miembro):
+    
+    usuario_response = supabase.table("usuarios").select("id_usuario, nombre, correo, avatar, edad, telefono, direccion").eq("id_usuario", id_miembro).execute()
+    usuario_data = usuario_response.data[0] if usuario_response.data else None
+
+    if not usuario_data:
+        return jsonify({"error": "Miembro no encontrado"}), 404
+
+    
+    historial_response = supabase.table("n_sesiones_progreso").select("fecha, peso, grasa_corporal, masa_muscular, observaciones").eq("id_miembro", id_miembro).order("fecha", desc=False).execute()
+    historial_data = historial_response.data
+    
+    fechas = [h["fecha"] for h in historial_data]
+    peso = [h["peso"] for h in historial_data]
+    grasa = [h["grasa_corporal"] for h in historial_data]
+    masa_muscular = [h["masa_muscular"] for h in historial_data]
+
+    last_update = historial_data[-1]["fecha"] if historial_data else None
+
+    
+    objetivos_response = supabase.table("n_objetivos").select("descripcion").eq("id_miembro", id_miembro).order("fecha_inicio", desc=True).execute()
+    objetivos_data = objetivos_response.data
+
+    
+    salud_response = supabase.table("n_estado_salud").select("fecha, hora, nota").eq("id_miembro", id_miembro).order("fecha", desc=True).execute()
+    salud_data = salud_response.data
+
+    
+    sesiones_response = supabase.table("n_sesiones_evaluacion").select("id_sesion, fecha, hora, notas, estado").eq("id_miembro", id_miembro).order("fecha", desc=True).execute()
+    sesiones_data = sesiones_response.data
+
+    return jsonify({
+        "usuario": usuario_data,
+        "objetivos": objetivos_data,
+        "estado_salud": salud_data,
+        "sesiones": sesiones_data,
+        "historial": {
+            "fechas": fechas,
+            "peso": peso,
+            "grasa": grasa,
+            "masa_muscular": masa_muscular,
+        },
+        "last_update": last_update
+    })
+
+@app.route("/api/nutricionista/progreso/registrar", methods=["POST"])
+def api_nutricionista_progreso_registrar():
+    data = request.json
+    id_miembro = data.get("id_miembro")
+    peso = data.get("peso")
+    grasa_corporal = data.get("grasa_corporal")
+    masa_muscular = data.get("masa_muscular")
+    observaciones = data.get("observaciones")
+    
+    if not id_miembro:
+        return jsonify({"error": "Faltan campos requeridos (id_miembro)"}), 400
+
+    try:
+        data_to_insert = {
+            "id_miembro": id_miembro,
+            "peso": peso,
+            "grasa_corporal": grasa_corporal,
+            "masa_muscular": masa_muscular,
+            "observaciones": observaciones,
+            "fecha": datetime.now().strftime("%Y-%m-%d") 
+        }
+        
+        response = supabase.table("n_sesiones_progreso").insert(data_to_insert).execute()
+        
+        return jsonify({"message": "Métricas de progreso registradas con éxito", "data": response.data}), 201
+    except Exception as e:
+        return jsonify({"error": f"Error al registrar las métricas: {str(e)}"}), 500
+
+@app.route("/api/nutricionista/sesiones/crear", methods=["POST"])
+def api_nutricionista_sesiones_crear():
+    data = request.json
+    id_miembro = data.get("id_miembro")
+    fecha = data.get("fecha")
+    hora = data.get("hora")
+    notas = data.get("notas")
+    estado = data.get("estado", "programada")
+    
+    if not id_miembro or not fecha or not hora:
+        return jsonify({"error": "Faltan campos requeridos (id_miembro, fecha, hora)"}), 400
+
+    try:
+        data_to_insert = {
+            "id_miembro": id_miembro,
+            "fecha": fecha,
+            "hora": hora,
+            "notas": notas,
+            "estado": estado
+        }
+        
+        response = supabase.table("n_sesiones_evaluacion").insert(data_to_insert).execute()
+        
+        return jsonify({"message": "Sesión registrada con éxito", "data": response.data}), 201
+    except Exception as e:
+        return jsonify({"error": f"Error al registrar la sesión: {str(e)}"}), 500
+
+@app.route("/api/nutricionista/sesiones/eliminar/<id_sesion>", methods=["DELETE"])
+def api_nutricionista_sesiones_eliminar(id_sesion):
+    try:
+        
+        response = supabase.table("n_sesiones_evaluacion").delete().eq("id_sesion", id_sesion).execute()
+        
+        return jsonify({"message": f"Sesión {id_sesion} eliminada con éxito", "data": response.data}), 200
+    except Exception as e:
+        return jsonify({"error": f"Error al eliminar la sesión: {str(e)}"}), 500
+
+@app.route("/api/nutricionista/sesiones/actualizar_estado/<id_sesion>", methods=["PUT"])
+def api_nutricionista_sesiones_actualizar_estado(id_sesion):
+    data = request.json
+    nuevo_estado = data.get("estado")
+    
+    if nuevo_estado not in ["programada", "realizada", "cancelada"]:
+        return jsonify({"error": "Estado no válido"}), 400
+
+    try:
+        
+        response = supabase.table("n_sesiones_evaluacion").update({"estado": nuevo_estado}).eq("id_sesion", id_sesion).execute()
+        
+        return jsonify({"message": f"Estado de la sesión {id_sesion} actualizado a {nuevo_estado}", "data": response.data}), 200
+    except Exception as e:
+        return jsonify({"error": f"Error al actualizar el estado de la sesión: {str(e)}"}), 500
+
+# MODULO RECEPCIONISTA
 
 @app.route("/index_recepcionista")
 def index_recepcionista():
@@ -2022,7 +2395,402 @@ def index_recepcionista():
 
 @app.route("/recepcionista_modulos_render/<modulo>")
 def recepcionista_modulos_render(modulo):
-    return render_template(f"receptionist_modules/{modulo}.html", user=session.get("user"))
+    user_data = session.get("user")
+    if not user_data:
+        user_data = {"rol": "invitado"}
+    return render_template(f"receptionist_modules/{modulo}.html", user=user_data)
+
+# SECCION PAGOS MEMBRESIAS
+
+# FUNCIONES APARTADO PAGO EMMBRESIA / MODULO PAGO MEMBRESIAS - RECEPCIONISTA
+
+def get_user_id_by_identificador(identificador):
+    if not identificador:
+        return None
+    
+    try:
+        response = supabase.table("usuarios").select("id_usuario").eq("cedula", identificador).single().execute()
+        return response.data["id_usuario"]
+    except Exception:
+        return None
+
+def obtener_id_usuario():
+    user = session.get("user")
+    if not user:
+        return None
+    return user.get("id_usuario")
+
+@app.route("/api/recepcionista/registrar_miembro", methods=["POST"])
+def recepcionista_registrar_miembro():
+    data = request.json
+    if not data:
+        return jsonify({"success": False, "message": "No se recibieron datos."}), 400
+    contrasena = data.get("contrasena")
+    if not contrasena:
+        return jsonify({"success": False, "message": "Contraseña es obligatoria."}), 400
+    contrasena_hash = scrypt.hash(contrasena)
+    datos_usuario = {
+        "nombre": data.get("nombre"),
+        "apellido": data.get("apellido"),
+        "cedula": data.get("cedula"),
+        "correo": data.get("correo"),
+        "contrasena": contrasena_hash,
+        "id_rol": data.get("id_rol"),
+        "telefono": data.get("telefono"),
+        "fecha_nacimiento": data.get("fecha_nacimiento"),
+        "metodo_pago": data.get("metodo_pago")
+    }
+    try:
+        response = supabase.table("usuarios").insert(datos_usuario).execute()
+        if response.data:
+            miembro_id = response.data[0]["id_usuario"]
+            return jsonify({"success": True, "miembro_id": miembro_id, "message": "Miembro registrado con éxito."}), 201
+        else:
+            return jsonify({"success": False, "message": "Fallo al registrar miembro en Supabase.", "error": response.error}), 500
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error al registrar miembro: {str(e)}"}), 500
+
+@app.route("/api/recepcionista/registrar_pago_y_membresia", methods=["POST"])
+def recepcionista_registrar_pago_y_membresia():
+    data = request.json
+    if not data or not data.get("identificador"):
+        return jsonify({"success": False, "message": "No se recibieron datos o el identificador es obligatorio."}), 400
+    identificador = data.get("identificador")
+    miembro_id = get_user_id_by_identificador(identificador)
+    if not miembro_id:
+        return jsonify({"success": False, "message": "Miembro no encontrado o Cédula/ID inválida."}), 404
+    tipo_membresia = data.get("tipo_membresia").lower()
+    fecha_inicio = data.get("fecha_inicio")
+    fecha_fin = data.get("fecha_fin")
+    monto = data.get("monto")
+    metodo_pago = data.get("metodo_pago")
+    try:
+        datos_membresia = {
+            "id_miembro": miembro_id,
+            "tipo_membresia": tipo_membresia,
+            "fecha_inicio": fecha_inicio,
+            "fecha_fin": fecha_fin,
+            "precio": monto,
+            "estado": "activa",
+            "metodo_pago": metodo_pago
+        }
+        res_membresia = supabase.table("m_membresias").insert(datos_membresia).execute()
+        if not res_membresia.data:
+            return jsonify({"success": False, "message": "Fallo al registrar el contrato de membresía.", "error": res_membresia.error}), 500
+        membresia_id = res_membresia.data[0]["id_membresia"]
+        datos_pago = {
+            "id_miembro": miembro_id,
+            "id_membresia": membresia_id,
+            "monto": monto,
+            "metodo_pago": metodo_pago,
+            "tipo_pago": data.get("tipo_pago", "Renovacion"),
+            "referencia_pago": data.get("referencia_pago"),
+            "estado_pago": "Completado"
+        }
+        res_pago = supabase.table("a_transacciones_pagos").insert(datos_pago).execute()
+        if res_pago.data:
+            return jsonify({"success": True, "membresia_id": membresia_id, "transaccion_id": res_pago.data[0]["id_transaccion"], "message": "Membresía y pago registrados con éxito."}), 201
+        else:
+            return jsonify({"success": False, "message": "Fallo al registrar la transacción de pago.", "error": res_pago.error}), 500
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error en la transacción de membresía/pago: {str(e)}"}), 500
+
+@app.route("/api/recepcionista/actualizar_estado_membresia", methods=["POST"])
+def actualizar_estado_membresia():
+    data = request.json
+    identificador = data.get("identificador")
+    fecha_inicio = data.get("fecha_inicio")
+    fecha_fin = data.get("fecha_fin")
+    if not identificador or not fecha_inicio or not fecha_fin:
+        return jsonify({"success": False, "message": "Datos incompletos."}), 400
+    miembro_id = get_user_id_by_identificador(identificador)
+    if not miembro_id:
+        return jsonify({"success": False, "message": "Miembro no encontrado."}), 404
+    try:
+        res_membresia = supabase.table("m_membresias").select("*").eq("id_miembro", miembro_id).neq("estado", "cancelada").order("fecha_fin", desc=True).limit(1).execute()
+        if not res_membresia.data:
+            return jsonify({"success": False, "message": "No hay membresías previas."}), 404
+        membresia_id = res_membresia.data[0]["id_membresia"]
+        update_data = {
+            "estado": "activa",
+            "fecha_inicio": fecha_inicio,
+            "fecha_fin": fecha_fin
+        }
+        res_update = supabase.table("m_membresias").update(update_data).eq("id_membresia", membresia_id).execute()
+        if res_update.data:
+            return jsonify({"success": True, "message": "Estado de membresía actualizado."}), 200
+        else:
+            return jsonify({"success": False, "message": "No se pudo actualizar la membresía."}), 500
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/api/recepcionista/obtener_estado_miembro", methods=["POST"])
+def obtener_estado_miembro():
+    data = request.json
+    identificador = data.get("identificador")
+    if not identificador:
+        return jsonify({"success": False, "message": "Identificador es obligatorio."}), 400
+    id_miembro = get_user_id_by_identificador(identificador)
+    if not id_miembro:
+        return jsonify({"success": False, "status": "No Miembro", "nombre": "No encontrado"}), 200
+    try:
+        res_usuario = supabase.table("usuarios").select("nombre, apellido").eq("id_usuario", id_miembro).single().execute()
+        nombre_completo = f"{res_usuario.data['nombre']} {res_usuario.data['apellido']}"
+        today = date.today().isoformat()
+        res_membresia = supabase.table("m_membresias").select("*").eq("id_miembro", id_miembro).neq("estado", "cancelada").order("fecha_fin", desc=True).limit(1).execute()
+        status = "No Membresía"
+        monto_pendiente = 0.0
+        if res_membresia.data:
+            membresia = res_membresia.data[0]
+            fecha_fin = datetime.strptime(membresia["fecha_fin"], "%Y-%m-%d").date().isoformat()
+            if membresia["estado"] == "activa" and fecha_fin >= today:
+                status = "Activo"
+            elif membresia["estado"] == "activa" and fecha_fin < today:
+                status = "Vencido"
+                monto_pendiente = float(membresia["precio"])
+            elif membresia["estado"] == "vencida":
+                status = "Vencido"
+                monto_pendiente = float(membresia["precio"])
+            else:
+                status = "Inactivo/Otro"
+        return jsonify({"success": True, "status": status, "nombre": nombre_completo, "id_miembro": id_miembro, "monto_pendiente": monto_pendiente}), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error al buscar estado: {str(e)}"}), 500
+
+@app.route("/api/recepcionista/membresias", methods=["GET"])
+def listar_membresias():
+    try:
+        response = supabase.table("m_membresias").select("*, usuarios!m_membresias_id_miembro_fkey(nombre, apellido, cedula)").order("fecha_inicio", desc=True).limit(50).execute()
+        return jsonify({"success": True, "data": response.data}), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error al listar membresías: {str(e)}"}), 500
+
+@app.route("/api/recepcionista/membresia/<id_membresia>", methods=["GET", "PUT"])
+def gestionar_membresia(id_membresia):
+    if request.method == "GET":
+        try:
+            response = supabase.table("m_membresias").select("*, usuarios!m_membresias_id_miembro_fkey(nombre, apellido, cedula)").eq("id_membresia", id_membresia).single().execute()
+            return jsonify({"success": True, "data": response.data}), 200
+        except Exception as e:
+            return jsonify({"success": False, "message": f"Membresía no encontrada o error: {str(e)}"}), 404
+    elif request.method == "PUT":
+        data = request.json
+        if not data:
+            return jsonify({"success": False, "message": "No se recibieron datos para actualizar."}), 400
+        try:
+            update_data = {}
+            if "estado" in data:
+                update_data["estado"] = data["estado"].lower()
+            if "fecha_fin" in data:
+                update_data["fecha_fin"] = data["fecha_fin"]
+            if "precio" in data:
+                update_data["precio"] = data["precio"]
+            if not update_data:
+                return jsonify({"success": False, "message": "No hay campos válidos para actualizar."}), 400
+            response = supabase.table("m_membresias").update(update_data).eq("id_membresia", id_membresia).execute()
+            if response.data:
+                return jsonify({"success": True, "message": "Membresía actualizada con éxito.", "data": response.data[0]}), 200
+            else:
+                return jsonify({"success": False, "message": "Fallo al actualizar membresía.", "error": response.error}), 500
+        except Exception as e:
+            return jsonify({"success": False, "message": f"Error al actualizar membresía: {str(e)}"}), 500
+
+@app.route("/api/recepcionista/transacciones", methods=["GET"])
+def listar_transacciones():
+    try:
+        fecha_desde = request.args.get('fecha_desde', (date.today() - timedelta(days=30)).isoformat())
+        response = supabase.table("a_transacciones_pagos").select("*, usuarios!a_transacciones_pagos_id_miembro_fkey(nombre, apellido), m_membresias(tipo_membresia)").gte("fecha_transaccion", fecha_desde).order("fecha_transaccion", desc=True).limit(50).execute()
+        return jsonify({"success": True, "data": response.data}), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error al listar transacciones: {str(e)}"}), 500
+
+@app.route("/api/recepcionista/checkins_hoy", methods=["GET"])
+def listar_checkins_hoy():
+    try:
+        today = date.today().isoformat()
+        response = supabase.table("r_checkins").select("*, usuarios_miembro:usuarios!r_checkins_id_miembro_fkey(nombre, apellido, cedula), usuarios_recepcionista:usuarios!r_checkins_id_recepcionista_fkey(nombre)").gte("fecha_entrada", today).order("fecha_entrada", desc=True).limit(50).execute()
+        return jsonify({"success": True, "data": response.data}), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error al listar check-ins de hoy: {str(e)}"}), 500
+
+@app.route("/api/recepcionista/dashboard_stats", methods=["GET"])
+def obtener_estadisticas_dashboard():
+    try:
+        today = date.today().isoformat()
+        next_week = (date.today() + timedelta(days=7)).isoformat()
+        res_activos = supabase.table("m_membresias").select("id_membresia", count="exact").eq("estado", "activa").gte("fecha_fin", today).execute()
+        total_activos = res_activos.count
+        res_vencimiento = supabase.table("m_membresias").select("id_membresia", count="exact").eq("estado", "activa").gte("fecha_fin", today).lte("fecha_fin", next_week).execute()
+        vencimientos_proximos = res_vencimiento.count
+        res_pagos_vencidos = supabase.table("a_transacciones_pagos").select("id_transaccion", count="exact").eq("estado_pago", "Pendiente").execute()
+        pagos_pendientes = res_pagos_vencidos.count
+        return jsonify({"success": True, "total_activos": total_activos, "vencimientos_proximos": vencimientos_proximos, "pagos_pendientes": pagos_pendientes}), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error al obtener estadísticas: {str(e)}"}), 500
+
+# SECCION CITAS
+
+# FUNCIONES APARTADO CITAS / MODULO CITAS - RECEPCIONISTA
+
+def obtener_id_y_nombre_por_cedula(cedula):
+    try:
+        response = supabase.table('usuarios').select('id_usuario, nombre, apellido').eq('cedula', cedula).execute()
+        
+        if response.data:
+            user = response.data[0]
+            return {
+                "id_usuario": user.get('id_usuario'),
+                "nombre_completo": f"{user.get('nombre')} {user.get('apellido')}"
+            }
+        return None
+    except Exception as e:
+        print(f"Error al buscar usuario por cédula: {e}")
+        return None
+
+@app.route('/api/reservar_cita', methods=['POST'])
+def reservar_cita():
+    data = request.get_json()
+    
+    try:
+        cedula = data.get('cedula')
+        tipo_servicio = data.get('tipo_servicio')
+        fecha_str = data.get('fecha')
+        hora_str = data.get('hora')
+        
+        if not all([cedula, tipo_servicio, fecha_str, hora_str]):
+            return jsonify({"mensaje": "Error: Faltan campos obligatorios."}), 400
+            
+        miembro_data = obtener_id_y_nombre_por_cedula(cedula)
+        if not miembro_data:
+            return jsonify({"mensaje": "Error: La cédula proporcionada no está registrada en el sistema."}), 404
+
+        id_miembro = miembro_data['id_usuario']
+
+        try:
+            datetime.strptime(fecha_str, DATE_FORMAT)
+            if len(hora_str) == 5:
+                hora_str += ':00'
+            datetime.strptime(hora_str, '%H:%M:%S') 
+        except ValueError as e:
+            return jsonify({"mensaje": "Error en el formato de datos (Fecha u Hora).", "detalles": str(e)}), 400
+
+        if tipo_servicio not in ['Nutrición', 'Masaje', 'Sauna']:
+            return jsonify({"mensaje": "Tipo de servicio inválido. Debe ser Nutrición, Masaje o Sauna."}), 400
+
+        cita_data = {
+            "id_miembro": id_miembro,
+            "tipo_servicio": tipo_servicio,
+            "fecha": fecha_str,
+            "hora": hora_str,
+            "estado": "Reservada"
+        }
+
+        response = supabase.table('r_citas').insert(cita_data).execute()
+        
+        if response.data:
+            cita_registrada = response.data[0]
+            cita_id = cita_registrada.get("id_cita")
+            
+            if not cita_id:
+                return jsonify({"mensaje": "Cita registrada, pero no se pudo obtener el ID de Supabase.", "detalles": "ID nulo."}), 500
+            
+            return jsonify({
+                "mensaje": "Cita registrada exitosamente.",
+                "id_cita": cita_id
+            }), 200
+        else:
+            error_message = response.error.get('message', 'Error desconocido de Supabase.') if response.error else 'Error sin detalles.'
+            return jsonify({"mensaje": "Error al insertar la cita en la base de datos.", "detalles": error_message}), 500
+
+    except Exception as e:
+        return jsonify({"mensaje": "Error interno del servidor al procesar la solicitud.", "detalles": str(e)}), 500
+
+@app.route('/api/consultar_citas_por_cedula', methods=['POST'])
+def consultar_citas_por_cedula():
+    data = request.get_json()
+    cedula = data.get('cedula')
+    page = data.get('page', 1)
+    limit = 15
+
+    if not cedula:
+        return jsonify({"mensaje": "La cédula es requerida para la consulta."}), 400
+
+    try:
+        response_user = supabase.table('usuarios').select('id_usuario').eq('cedula', cedula).limit(1).maybe_single().execute()
+
+        if not response_user.data:
+            return jsonify({"mensaje": "Miembro no encontrado o cédula incorrecta.", "citas": {}, "total": 0, "paginas": 0}), 404
+
+        id_miembro = response_user.data.get('id_usuario')
+        
+        offset = (page - 1) * limit
+        
+        response_count = supabase.table('r_citas').select('id_cita', count='exact')\
+            .eq('id_miembro', id_miembro)\
+            .eq('estado', 'Reservada')\
+            .execute()
+        
+        total_citas = response_count.count if response_count.count else 0
+        total_paginas = (total_citas + limit - 1) // limit if total_citas > 0 else 0
+        
+        response_citas = supabase.table('r_citas').select('*')\
+            .eq('id_miembro', id_miembro)\
+            .eq('estado', 'Reservada')\
+            .order('fecha', desc=False)\
+            .order('hora', desc=False)\
+            .range(offset, offset + limit - 1)\
+            .execute()
+
+        citas_formateadas = []
+        for cita in response_citas.data:
+            citas_formateadas.append({
+                "id_cita": cita.get("id_cita"),
+                "tipo_servicio": cita.get("tipo_servicio"),
+                "fecha": cita.get("fecha"),
+                "hora": str(cita.get("hora")),
+                "estado": cita.get("estado")
+            })
+
+        return jsonify({
+            "mensaje": "Citas encontradas exitosamente.",
+            "citas": citas_formateadas,
+            "total": total_citas,
+            "pagina_actual": page,
+            "total_paginas": total_paginas
+        }), 200
+
+    except Exception as e:
+        error_details = str(e)
+        if 'response_user' in locals() and response_user.error:
+             error_details = response_user.error.get('message', str(e))
+        return jsonify({"mensaje": "Error interno del servidor al consultar las citas.", "detalles": error_details}), 500
+
+@app.route('/api/cancelar_cita', methods=['DELETE'])
+def cancelar_cita():
+    data = request.get_json()
+    id_cita = data.get('id_cita')
+
+    if not id_cita:
+        return jsonify({"mensaje": "El ID de la cita es requerido para la cancelación."}), 400
+
+    try:
+        uuid.UUID(id_cita)
+    except ValueError:
+        return jsonify({"mensaje": "Formato de ID de cita inválido."}), 400
+
+    try:
+        response = supabase.table('r_citas').update({"estado": "Cancelada"}).eq('id_cita', id_cita).execute()
+        
+        if response.data and len(response.data) > 0:
+            return jsonify({"mensaje": "Cita cancelada exitosamente.", "id_cita_cancelada": id_cita}), 200
+        else:
+            return jsonify({"mensaje": "No se encontró la cita con el ID proporcionado para cancelar."}), 404
+
+    except Exception as e:
+        error_details = str(e)
+        if 'response' in locals() and response.error:
+            error_details = response.error.get('message', str(e))
+        return jsonify({"mensaje": "Error interno del servidor al cancelar la cita.", "detalles": error_details}), 500
 
 # APP RUN
 

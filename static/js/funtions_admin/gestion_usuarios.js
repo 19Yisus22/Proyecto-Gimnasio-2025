@@ -18,6 +18,33 @@ function mostrarToast(mensaje, tipo='success') {
   toastEl.addEventListener('hidden.bs.toast', ()=> toastEl.remove());
 }
 
+function validarCedula(cedula) {
+  return /^\d{6,15}$/.test(cedula);
+}
+
+function validarCorreo(correo) {
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return regex.test(correo);
+}
+
+function validarTelefono(telefono) {
+  if (!telefono) return true;
+  return /^\d{7,15}$/.test(telefono);
+}
+
+function validarFechaNacimiento(fecha) {
+  if (!fecha) return true;
+  const fechaNac = new Date(fecha);
+  const hoy = new Date();
+  const edad = (hoy - fechaNac) / (1000 * 60 * 60 * 24 * 365);
+  return edad >= 10 && edad <= 120;
+}
+
+function validarTexto(texto, minLength = 2, maxLength = 100) {
+  if (!texto) return false;
+  return texto.length >= minLength && texto.length <= maxLength;
+}
+
 async function listarUsuarios() {
   try {
     const response = await fetch(`/usuarios/listar`);
@@ -26,7 +53,6 @@ async function listarUsuarios() {
     }
     usuariosGlobal = await response.json();
     filtrarTabla();
-    // No se muestra toast de éxito aquí para evitar spam al cargar la página
   } catch (error) {
     console.error('Error al obtener la lista de usuarios:', error);
     mostrarToast('Error al cargar usuarios', 'danger');
@@ -48,8 +74,53 @@ async function guardarUsuario() {
   const metodoPago = document.getElementById('metodoPagoUsuario').value;
   const membresiaActiva = document.getElementById('membresiaUsuario').value === 'true';
 
-  if(!nombre || !apellido || !cedula || !correo || !rol || (!editandoId && !contrasena)) {
-    mostrarToast('Todos los campos obligatorios deben estar llenos, incluyendo Contraseña para nuevos registros.', 'danger');
+  if(!nombre || !apellido || !cedula || !correo || !rol) {
+    mostrarToast('Todos los campos obligatorios deben estar llenos', 'danger');
+    return;
+  }
+
+  if (!editandoId && !contrasena) {
+    mostrarToast('La contraseña es obligatoria para nuevos usuarios', 'danger');
+    return;
+  }
+
+  if (!validarTexto(nombre)) {
+    mostrarToast('El nombre debe tener entre 2 y 100 caracteres', 'danger');
+    return;
+  }
+
+  if (!validarTexto(apellido)) {
+    mostrarToast('El apellido debe tener entre 2 y 100 caracteres', 'danger');
+    return;
+  }
+
+  if (!validarCedula(cedula)) {
+    mostrarToast('La cédula debe contener solo números (6-15 dígitos)', 'danger');
+    return;
+  }
+
+  if (!validarCorreo(correo)) {
+    mostrarToast('El correo electrónico no es válido', 'danger');
+    return;
+  }
+
+  if (!validarTelefono(telefono)) {
+    mostrarToast('El teléfono debe contener solo números (7-15 dígitos)', 'danger');
+    return;
+  }
+
+  if (direccion && direccion.length > 200) {
+    mostrarToast('La dirección no puede exceder 200 caracteres', 'danger');
+    return;
+  }
+
+  if (!validarFechaNacimiento(fechaNacimiento)) {
+    mostrarToast('La fecha de nacimiento no es válida (edad entre 10 y 120 años)', 'danger');
+    return;
+  }
+
+  if (!editandoId && contrasena.length < 6) {
+    mostrarToast('La contraseña debe tener al menos 6 caracteres', 'danger');
     return;
   }
 
@@ -87,7 +158,6 @@ async function guardarUsuario() {
       body: JSON.stringify(usuario)
     });
     
-    // VERIFICACIÓN CLAVE: Solo si la respuesta HTTP es exitosa (código 200-299)
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Error desconocido en el servidor.' }));
         throw new Error(`Error en la solicitud: ${errorData.message || response.statusText}`);
@@ -138,12 +208,21 @@ function formatearFecha(fechaISO) {
 }
 
 function editarUsuario(id_usuario) {
+  if (!id_usuario) {
+    mostrarToast('ID de usuario no válido', 'danger');
+    return;
+  }
+
   fetch(`/usuarios/obtener/${id_usuario}`)
     .then(res => {
         if (!res.ok) throw new Error('Error al obtener usuario');
         return res.json();
     })
     .then(u => {
+      if (!u || !u.id_usuario) {
+        throw new Error('Datos de usuario incompletos');
+      }
+
       document.getElementById('nombreUsuario').value = u.nombre;
       document.getElementById('apellidoUsuario').value = u.apellido;
       document.getElementById('cedulaUsuario').value = u.cedula;
@@ -170,7 +249,12 @@ function editarUsuario(id_usuario) {
 }
 
 function eliminarUsuario(correo) {
-  if(confirm(`Eliminar usuario con correo: ${correo}?`)) {
+  if (!correo || !validarCorreo(correo)) {
+    mostrarToast('Correo no válido para eliminar', 'danger');
+    return;
+  }
+
+  if(confirm(`¿Está seguro de eliminar el usuario con correo: ${correo}?`)) {
     fetch('/usuarios/eliminar', {
       method:'DELETE',
       headers:{'Content-Type':'application/json'},

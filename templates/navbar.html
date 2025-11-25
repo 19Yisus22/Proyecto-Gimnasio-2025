@@ -35,24 +35,22 @@
         <li><a href="/index_entrenador" class="nav-link"><i class="bi bi-house-door me-2"></i>Inicio</a></li>
         <li><a href="/entrenador_modulos_render/gestion_clases" class="nav-link"><i class="bi bi-calendar-event me-2"></i>Mis Clases</a></li>
         <li><a href="/entrenador_modulos_render/entrenamientos_personalizados" class="nav-link"><i class="bi bi-lightning me-4"></i>Entrenamientos Personalizados</a></li>
-        <li><a href="/entrenador_modulos_render/progreso_miembros" class="nav-link"><i class="bi bi-people me-2"></i>Progreso Miembros</a></li>
-        <li><a href="/entrenador_modulos_render/evaluacion_progreso" class="nav-link"><i class="bi bi-graph-up-arrow me-2"></i>Evaluación de Progresos</a></li>
+        <li><a href="/entrenador_modulos_render/evaluacion_progreso" class="nav-link"><i class="bi bi-people me-2"></i>Evaluacion de Progreso</a></li>
       {% elif rol_nombre == 'recepcionista' %}
         <li><a href="/index_recepcionista" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
+        <li><a href="/recepcionista_modulos_render/gestion_pagos" class="nav-link"><i class="bi bi-cash-coin me-2"></i>Gestión de Pagos</a></li>
         <li><a href="/recepcionista_modulos_render/gestion_reservas" class="nav-link"><i class="bi bi-journal-check me-2"></i>Reservas</a></li>
-        <li><a href="/recepcionista_modulos_render/gestion_miembros" class="nav-link"><i class="bi bi-cash-coin me-2"></i>Miembros</a></li>
-        <li><a href="/recepcionista_modulos_render/gestion_pagos" class="nav-link"><i class="bi bi-cash-coin me-2"></i>Pagos</a></li>
       {% elif rol_nombre == 'nutricionista' %}
         <li><a href="/index_nutricionista" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
-        <li><a href="/nutricionista_modulos_render/gestion_usuarios" class="nav-link"><i class="bi bi-people me-2"></i>Gestionar Usuarios</a></li>
         <li><a href="/nutricionista_modulos_render/plan_nutricional" class="nav-link"><i class="bi bi-apple me-2"></i>Plan Nutricional</a></li>
+        <li><a href="/nutricionista_modulos_render/gestion_usuarios" class="nav-link"><i class="bi bi-people me-2"></i>Progreso y Seguimiento</a></li>
         <li><a href="/nutricionista_modulos_render/comunicacion_nutricionista" class="nav-link"><i class="bi bi-chat-left-dots me-2"></i>Mensajes</a></li>
       {% elif rol_nombre == 'administrador' %}
         <li><a href="/index_admin" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
         <li><a href="/admin_modulos_render/gestion_usuarios" class="nav-link"><i class="bi bi-people me-2"></i>Gestión de Usuarios</a></li>
         <li><a href="/admin_modulos_render/gestion_clases_general" class="nav-link"><i class="bi bi-calendar-check me-2"></i>Gestión Clases General</a></li>
         <li><a href="/admin_modulos_render/analisis_reportes" class="nav-link"><i class="bi bi-bar-chart-line me-2"></i>Análisis | Reportes</a></li>
-        <li><a href="/admin_modulos_render/gestion_publicidad" class="nav-link"><i class="bi bi-gear me-2"></i>Sistema de Publicidad</a></li>
+        <li><a href="/admin_modulos_render/gestion_publicidad" class="nav-link"><i class="bi bi-megaphone"> </i>Sistema de Publicidad</a></li>
       {% endif %}
     {% else %}
       <li><a href="{{ url_for('index') }}" class="nav-link"><i class="bi bi-house me-2"></i>Inicio</a></li>
@@ -68,7 +66,6 @@
         </a>
         <ul class="dropdown-menu text-small shadow dropdown-menu-end animate__animated animate__fadeIn">
           <li><a class="dropdown-item" href="/index_perfil">Mi Perfil</a></li>
-          <li><a class="dropdown-item" href="/index_configuracion">Configuración</a></li>
           <li><hr class="dropdown-divider"></li>
           <li><button class="dropdown-item text-danger" id="btnCerrarSesionDropdown">Cerrar sesión</button></li>
         </ul>
