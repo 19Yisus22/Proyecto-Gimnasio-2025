@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles_member/style_progreso_fisico.css') }}">
+    <script>const ID_USUARIO="{{ session['user']['id_usuario'] if session.get('user') else '' }}";</script>
 
 </head>
 

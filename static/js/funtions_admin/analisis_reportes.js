@@ -1,20 +1,31 @@
 let chart;
-let usuariosSeleccionados = [];
-let todosUsuarios = [];
+let usuario = null;
+let usuarios = [];
 
-function cargarUsuarios() {
-  fetch(`/usuarios/listar?roles=miembro,entrenador`)
-    .then(res => res.json())
-    .then(data => {
-      todosUsuarios = data;
-      mostrarUsuarios(data);
+function cargarKpis() {
+  fetch('/reportes/kpis')
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('kpi_membresias').innerText = d.membresias;
+      document.getElementById('kpi_asistencia').innerText = d.asistencia + '%';
+      document.getElementById('kpi_ingresos').innerText = '$' + d.ingresos;
     });
 }
 
-function mostrarUsuarios(usuarios) {
+function cargarUsuarios() {
+  fetch('/usuarios/listar?roles=miembro')
+    .then(r => r.json())
+    .then(d => {
+      usuarios = d;
+      mostrarUsuarios(d);
+      actualizarGraficaGeneral();
+    });
+}
+
+function mostrarUsuarios(lista) {
   const cont = document.getElementById('usuariosList');
   cont.innerHTML = '';
-  usuarios.forEach(u => {
+  lista.forEach(u => {
     const card = document.createElement('div');
     card.className = 'usuario-card';
     card.innerHTML = `<img src="${u.imagen_url || '/static/default.png'}"><span>${u.nombre} ${u.apellido}</span>`;
@@ -23,13 +34,12 @@ function mostrarUsuarios(usuarios) {
   });
 }
 
-function seleccionarUsuario(u, cardEl) {
-  usuariosSeleccionados = [u];
-  document.querySelectorAll('.usuario-card').forEach(el => el.classList.remove('selected'));
-  cardEl.classList.add('selected');
+function seleccionarUsuario(u, card) {
+  usuario = u;
+  document.querySelectorAll('.usuario-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
   mostrarDetalle(u);
-  document.getElementById('exportPDF').disabled = false;
-  document.getElementById('exportExcel').disabled = false;
+  actualizarGrafica();
 }
 
 function mostrarDetalle(u) {
@@ -41,61 +51,65 @@ function mostrarDetalle(u) {
   document.getElementById('direccionDetalle').innerText = 'Dirección: ' + (u.direccion || '-');
 }
 
+document.getElementById('filtroReporte').addEventListener('change', () => {
+  if (usuario) actualizarGrafica();
+  else actualizarGraficaGeneral();
+});
+
 function filtrarPorCedula() {
   const cedula = document.getElementById('buscarCedula').value.trim();
-  if(cedula === '') {
-    mostrarUsuarios(todosUsuarios);
-    return;
-  }
-  const filtrados = todosUsuarios.filter(u => u.cedula.includes(cedula));
+  if (cedula === '') return mostrarUsuarios(usuarios);
+  const filtrados = usuarios.filter(u => u.cedula.includes(cedula));
   mostrarUsuarios(filtrados);
 }
 
-function generarReporte() {
-  if (usuariosSeleccionados.length === 0) return;
+function actualizarGraficaGeneral() {
   const tipo = document.getElementById('filtroReporte').value;
-  const ids = usuariosSeleccionados.map(u => u.id_usuario).join(',');
-  fetch(`/reportes/data?tipo=${tipo}&usuarios=${ids}`)
-    .then(res => res.json())
-    .then(data => {
-      const labels = data.labels;
-      const valores = data.valores;
-      if(chart) chart.destroy();
-      const ctx = document.getElementById('chartReporte').getContext('2d');
-      chart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: tipo.charAt(0).toUpperCase() + tipo.slice(1),
-            data: valores,
-            backgroundColor: 'rgba(54, 162, 235, 0.6)',
-            borderColor: 'rgba(54, 162, 235, 1)',
-            borderWidth: 1
-          }]
-        },
-        options: { responsive: true, scales: { y: { beginAtZero: true } } }
-      });
-
-      const tbody = document.querySelector('#tablaReporte tbody');
-      tbody.innerHTML = '';
-      data.detalles.forEach(d => {
-        const row = `<tr>
-          <td>${d.nombre}</td>
-          <td>${d.asistencia}</td>
-          <td>${d.pagos_totales}</td>
-          <td>${d.retencion}</td>
-          <td>${d.satisfaccion}</td>
-          <td>${d.progreso}</td>
-          <td>${d.nutricion}</td>
-        </tr>`;
-        tbody.innerHTML += row;
-      });
-    });
+  fetch(`/api/admin/reportes_data?tipo=${tipo}`)
+    .then(r => r.json())
+    .then(data => renderizarGrafica(data));
 }
 
-function exportarPDF() {}
-function exportarExcel() {}
-function agregarComentario() {}
+function actualizarGrafica() {
+  const tipo = document.getElementById('filtroReporte').value;
+  fetch(`/api/admin/reportes_data?tipo=${tipo}&cedula=${usuario.cedula}`)
+    .then(r => r.json())
+    .then(data => renderizarGrafica(data));
+}
 
-window.onload = cargarUsuarios;
+function renderizarGrafica(data) {
+  const ctx = document.getElementById('chartReporte').getContext('2d');
+  if (chart) chart.destroy();
+
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.labels,
+      datasets: [{
+        label: '',
+        data: data.valores,
+        fill: false,
+        borderColor: 'rgba(54, 162, 235, 0.8)',
+        tension: 0.3
+      }]
+    },
+    options: { responsive: true }
+  });
+
+  const tbody = document.querySelector('#tablaReporte tbody');
+  tbody.innerHTML = '';
+
+  Object.entries(data.detalles[0]).forEach(([k, v]) => {
+    tbody.innerHTML += `
+      <tr>
+        <td style="color: black;">${k}</td>
+        <td style="color: black;">${v}</td>
+      </tr>
+    `;
+  });
+}
+
+window.onload = () => {
+  cargarKpis();
+  cargarUsuarios();
+};

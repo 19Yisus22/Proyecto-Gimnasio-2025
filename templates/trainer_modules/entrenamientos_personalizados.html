@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/styles_trainer/style_entrenamientos_personalizados.css') }}">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>const ID_USUARIO="{{ session['user']['id_usuario'] if session.get('user') else '' }}";</script>
 
 </head>
 <body>
