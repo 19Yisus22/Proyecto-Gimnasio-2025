@@ -1,8 +1,9 @@
-from flask_cors import CORS
-import json
 import re
+import json
+from flask_cors import CORS
 from datetime import datetime
 from dotenv import load_dotenv
+from unidecode import unidecode
 from passlib.hash import scrypt
 from supabase import create_client
 from datetime import datetime, timezone 
@@ -61,7 +62,7 @@ def obtener_id_usuario():
         return None
     return user.get("id_usuario")
 
-@app.route("/")
+@app.route("/") 
 def index():
     user = session.get("user")
     return render_template("inicio.html", user=user)
@@ -121,60 +122,80 @@ def registro():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
-        return render_template("login.html", user=session.get("user"))
+        user_id = obtener_id_usuario()
+        if user_id:
+            rol_nombre = session["user"].get("rol", {}).get("nombre_rol", "visitante")
+            redirect_map = {
+                "miembro": url_for("index_miembro"),
+                "entrenador": url_for("index_entrenador"),
+                "recepcionista": url_for("index_recepcionista"),
+                "nutricionista": url_for("index_nutricionista"),
+                "administrador": url_for("index_admin"),
+                "visitante": url_for("index")
+            }
+            return redirect(redirect_map.get(rol_nombre, url_for("index")))
+        return render_template("login.html")
 
     if not request.is_json:
-        return jsonify({"ok": False, "error": "Content-Type JSON requerido"}), 415
+        return jsonify({"ok": False, "error": "Solicitud inválida"}), 415
 
     data = request.get_json()
     correo = data.get("correo", "").strip().lower()
-    contrasena = data.get("contrasena", "")
+    contrasena = data.get("contrasena", "").strip()
 
     if not correo or not contrasena:
-        return jsonify({"ok": False, "error": "Correo y contraseña obligatorios"}), 400
+        return jsonify({"ok": False, "error": "Todos los campos son obligatorios"}), 400
 
-    # Buscar usuario en Supabase
-    res = supabase.table("usuarios").select("*").eq("correo", correo).maybe_single().execute()
-    usuario = res.data
+    email_regex = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    if not re.match(email_regex, correo):
+        return jsonify({"ok": False, "error": "El formato del correo no es válido"}), 400
 
-    if not usuario:
-        return jsonify({"ok": False, "error": "Correo no registrado"}), 404
+    if len(contrasena) < 6 or len(contrasena) > 50:
+        return jsonify({"ok": False, "error": "La contraseña debe tener entre 6 y 50 caracteres"}), 400
 
-    # Verificar contraseña usando passlib scrypt
-    if not scrypt.verify(contrasena, usuario.get("contrasena", "")):
-        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 401
+    try:
+        res = supabase.table("usuarios").select("*, roles(nombre_rol)").eq("correo", correo).maybe_single().execute()
+        usuario = res.data
 
-    # Obtener rol del usuario
-    rol_res = supabase.table("roles").select("*").eq("id_rol", usuario.get("id_rol")).maybe_single().execute()
-    rol = rol_res.data if rol_res.data else {"nombre_rol": "visitante"}
+        if not usuario or not scrypt.verify(contrasena, usuario.get("contrasena", "")):
+            return jsonify({"ok": False, "error": "Usuario o contraseña incorrectos"}), 401
 
-    # Guardar datos del usuario en sesión
-    session["user"] = {
-        "id_usuario": usuario.get("id_usuario"),
-        "nombre": usuario.get("nombre"),
-        "apellido": usuario.get("apellido"),
-        "correo": usuario.get("correo"),
-        "imagen_url": usuario.get("imagen_url") or "/static/uploads/default_icon_profile.png",
-        "rol": {"id_rol": usuario.get("id_rol"), "nombre_rol": rol.get("nombre_rol")}
-    }
+        usuario.pop("contrasena", None)
+        
+        rol_data = usuario.get("roles", {})
+        nombre_rol = rol_data.get("nombre_rol") if rol_data and isinstance(rol_data, dict) else "visitante"
+        id_rol = usuario.get("id_rol")
+        
+        session["user"] = {
+            "id_usuario": usuario.get("id_usuario"),
+            "nombre": usuario.get("nombre"),
+            "apellido": usuario.get("apellido"),
+            "correo": usuario.get("correo"),
+            "imagen_url": usuario.get("imagen_url") or "/static/uploads/default_icon_profile.png",
+            "rol": {"id_rol": id_rol, "nombre_rol": nombre_rol}
+        }
+        
+        redirect_map = {
+            "miembro": "/index_miembro",
+            "entrenador": "/index_entrenador",
+            "recepcionista": "/index_recepcionista",
+            "nutricionista": "/index_nutricionista",
+            "administrador": "/index_admin",
+            "visitante": "/"
+        }
+        
+        redirect_to = redirect_map.get(nombre_rol, "/")
 
-    # Mapear redirección según rol
-    redirect_map = {
-        "miembro": "/index_miembro",
-        "entrenador": "/index_entrenador",
-        "recepcionista": "/index_recepcionista",
-        "nutricionista": "/index_nutricionista",
-        "administrador": "/index_admin",
-        "visitante": "/"
-    }
+        return jsonify({"ok": True, "user": session["user"], "redirect": redirect_to}), 200
 
-    return jsonify({"ok": True, "user": session["user"], "redirect": redirect_map.get(rol.get("nombre_rol"), "/")})
+    except Exception as e:
+        print(f"Error en login: {e}")
+        return jsonify({"ok": False, "error": "Error al procesar la solicitud. Intente nuevamente"}), 500
 
 @app.route("/logout")
 def logout():
-    session.clear()
+    session.pop("user", None)
     return jsonify({"ok": True, "redirect": url_for("index")})
-
 
 # MODULOS MIEMBROS
 
@@ -1238,230 +1259,231 @@ def instructor_obtener_calificaciones_clases(id_instructor):
     except Exception as e:
         return jsonify({"error": "Ocurrió un error al obtener las calificaciones."}), 500 
 
-# MODULO PROGRESO MIEMBROS
+# MODULO EVALUACION PROGRESO
 
-    @app.route("/api/entrenador/cargarDashboardStats", methods=["GET"])
-    def cargar_dashboard_stats():
-        """
-        Carga las cuatro estadísticas principales del dashboard.
-        1. Total de Miembros (rol 'miembro') - Usa id_rol para el filtro.
-        2. Total de Metas Alcanzadas.
-        3. Total de Asistencia Confirmada.
-        4. Total de Calorías Quemadas.
-        """
-        try:
-            # 1. Obtener el ID del rol 'miembro'
-            # Usamos .limit(1) y .maybe_single() para mayor seguridad si hubiera duplicados
-            res_rol = supabase.from_('roles').select('id_rol').eq('nombre', 'miembro').limit(1).maybe_single().execute()
-            id_rol_miembro = res_rol.data.get('id_rol') if res_rol.data else None
+@app.route("/api/entrenador/cargarEntrenadores", methods=["GET"])
+def api_entrenador_cargar_entrenadores():
+    user_id = obtener_id_usuario()
+    if not user_id:
+        return jsonify({"ok": False, "mensaje": "No autorizado"}), 401
+    
+    try:
+        response = (
+            supabase.table("usuarios")
+            .select("id_usuario, nombre")
+            .in_("rol", ["entrenador", "staff"])
+            .execute()
+        )
+        
+        return jsonify({"ok": True, "entrenadores": response.data})
+    
+    except Exception as e:
+        print(f"Error en cargarEntrenadores: {e}")
+        return jsonify({"ok": False, "mensaje": str(e)}), 500
 
-            total_miembros = 0
-            if id_rol_miembro:
-                # 1. Total Miembros (rol 'miembro')
-                # Consulta simple filtrando solo por id_rol para evitar errores de alias/join
-                res_miembros = supabase.from_('usuarios').select(
-                    'id_usuario', 
-                    count='exact'
-                ).eq('id_rol', id_rol_miembro).execute()
-                total_miembros = res_miembros.count if res_miembros.count is not None else 0
+@app.route("/api/entrenador/cargarEstadisticas", methods=["GET"])
+def api_entrenador_cargar_estadisticas():
+    user_id = obtener_id_usuario()
+    if not user_id:
+        return jsonify({"ok": False, "mensaje": "No autorizado"}), 401
 
-            # 2. Metas Alcanzadas (m_objetivos donde estado='cumplido')
-            res_metas = supabase.from_('m_objetivos').select(
-                'id_objetivo', 
-                count='exact'
-            ).eq('estado', 'cumplido').execute()
-            metas_cumplidas = res_metas.count if res_metas.count is not None else 0
+    try:
+        rol_miembro_res = (
+            supabase.table("roles")
+            .select("id_rol")
+            .eq("nombre_rol", "miembro")
+            .single()
+            .execute()
+        )
 
-            # 3. Asistencia Confirmada (m_clases_reservadas donde asistencia_confirmada=TRUE)
-            res_asistencia = supabase.from_('m_clases_reservadas').select(
-                'id_reserva', 
-                count='exact'
-            ).eq('asistencia_confirmada', True).execute()
-            asistencia_confirmada = res_asistencia.count if res_asistencia.count is not None else 0
+        rol_miembro_id = rol_miembro_res.data["id_rol"]
 
-            # 4. Total Calorías Quemadas (Suma de calorias_quemadas en m_progreso)
-            res_calorias = supabase.from_('m_progreso').select('calorias_quemadas').execute()
-            total_calorias = sum(p.get('calorias_quemadas') or 0 for p in res_calorias.data)
+        total_miembros_res = (
+            supabase.table("usuarios")
+            .select("id_usuario", count="exact")
+            .eq("id_rol", rol_miembro_id)
+            .execute()
+        )
+
+        miembros_count = total_miembros_res.count or 0
+
+        fecha_actual = datetime.now()
+        primer_dia_mes = fecha_actual.replace(day=1).strftime('%Y-%m-%d')
+
+        evaluaciones_mes_res = (
+            supabase.table("e_evaluaciones_progreso")
+            .select("id", count="exact")
+            .gte("fecha", primer_dia_mes)
+            .execute()
+        )
+
+        evaluaciones_count = evaluaciones_mes_res.count or 0
+
+        objetivos_cumplidos_res = (
+            supabase.table("m_objetivos")
+            .select("id_objetivo", count="exact")
+            .eq("estado", "cumplido")
+            .execute()
+        )
+
+        objetivos_count = objetivos_cumplidos_res.count or 0
+
+        return jsonify({
+            "ok": True,
+            "total_miembros": miembros_count,
+            "evaluaciones_mes": evaluaciones_count,
+            "objetivos_cumplidos": objetivos_count
+        })
+
+    except Exception as e:
+        return jsonify({"ok": False, "mensaje": str(e)}), 500
+
+@app.route("/api/entrenador/cargarMiembros", methods=["GET"])
+def api_entrenador_cargar_miembros():
+    user_id = obtener_id_usuario()
+    if not user_id:
+        return jsonify({"ok": False, "mensaje": "No autorizado"}), 401
+
+    try:
+        rol_miembro_res = (
+            supabase.table("roles")
+            .select("id_rol")
+            .eq("nombre_rol", "miembro")
+            .single()
+            .execute()
+        )
+
+        rol_miembro_id = rol_miembro_res.data["id_rol"]
+
+        res = (
+            supabase.table("usuarios")
+            .select("id_usuario, nombre, apellido")
+            .eq("id_rol", rol_miembro_id)
+            .order("nombre", desc=False)
+            .execute()
+        )
+
+        miembros = [{
+            "id_miembro": u["id_usuario"],
+            "nombre": f"{u['nombre']} {u['apellido']}"
+        } for u in res.data]
+
+        return jsonify({"ok": True, "miembros": miembros})
+
+    except Exception as e:
+        return jsonify({"ok": False, "mensaje": str(e)}), 500
+
+@app.route("/api/entrenador/registrarMetricas", methods=["POST"])
+def api_entrenador_registrar_metricas():
+    user_id = obtener_id_usuario()
+    if not user_id:
+        return jsonify({"ok": False, "mensaje": "No autorizado"}), 401
+    
+    try:
+        datos = request.get_json()
+
+        if not datos.get("id_miembro") or not datos.get("peso"):
+            return jsonify({"ok": False, "mensaje": "Datos incompletos"}), 400
+
+        nueva_evaluacion = {
+            "id_miembro": datos["id_miembro"],
+            "id_entrenador": user_id,
+            "fecha": datos.get("fecha", datetime.now().strftime('%Y-%m-%d')),
+            "peso": datos["peso"],
+            "imc": datos.get("imc"),
+            "calorias_quemadas": datos.get("calorias_quemadas", 0),
+            "fuerza": datos.get("fuerza"),
+            "resistencia": datos.get("resistencia"),
+            "masa_muscular": datos.get("masa_muscular"),
+            "grasa_corporal": datos.get("grasa_corporal"),
+            "notas": datos.get("notas"),
+            "objetivo_personal": datos.get("objetivo_personal")
+        }
+        
+        response = supabase.table("e_evaluaciones_progreso").insert(nueva_evaluacion).execute()
+        
+        return jsonify({
+            "ok": True,
+            "mensaje": "Métricas registradas exitosamente",
+            "data": response.data
+        }), 201
+
+    except Exception as e:
+        return jsonify({"ok": False, "mensaje": str(e)}), 500
+
+@app.route("/api/entrenador/cargarDetalle/<id_miembro>", methods=["GET"])
+def api_entrenador_cargar_detalle(id_miembro):
+    user_id = obtener_id_usuario()
+    if not user_id:
+        return jsonify({"ok": False, "mensaje": "No autorizado"}), 401
+    
+    try:
+        response = (
+            supabase.table("e_evaluaciones_progreso")
+            .select("*")
+            .eq("id_miembro", id_miembro)
+            .order("fecha", desc=False)
+            .execute()
+        )
+        
+        historial = [{
+            "id": ev.get("id"),
+            "fecha": ev.get("fecha"),
+            "peso": ev.get("peso"),
+            "imc": ev.get("imc"),
+            "calorias_quemadas": ev.get("calorias_quemadas"),
+            "fuerza": ev.get("fuerza"),
+            "resistencia": ev.get("resistencia"),
+            "masa_muscular": ev.get("masa_muscular"),
+            "grasa_corporal": ev.get("grasa_corporal"),
+            "objetivo_personal": ev.get("objetivo_personal"),
+            "notas": ev.get("notas")
+        } for ev in response.data]
+        
+        return jsonify({"ok": True, "historial": historial})
+    
+    except Exception as e:
+        return jsonify({"ok": False, "mensaje": str(e)}), 500
+
+@app.route("/api/entrenador/cargarEvaluaciones", methods=["GET"])
+def api_entrenador_cargar_evaluaciones():
+    user_id = obtener_id_usuario()
+    if not user_id:
+        return jsonify({"ok": False, "mensaje": "No autorizado"}), 401
+    
+    try:
+        response = (
+            supabase.table("e_evaluaciones_progreso")
+            .select("*, usuarios:usuarios!e_evaluaciones_progreso_id_miembro_fkey(nombre, apellido)")
+            .order("fecha", desc=True)
+            .execute()
+        )
+
+        evaluaciones = []
+        for ev in response.data:
+            cliente = ev.get("usuarios", {})
+            nombre = f"{cliente.get('nombre', '')} {cliente.get('apellido', '')}".strip()
             
-            return jsonify({
-                "ok": True,
-                "stats": {
-                    "totalMiembros": total_miembros,
-                    "metasAlcanzadas": metas_cumplidas,
-                    "asistenciaConfirmada": asistencia_confirmada,
-                    "caloriasTotales": total_calorias
-                }
+            evaluaciones.append({
+                "id": ev.get("id"),
+                "id_miembro": ev.get("id_miembro"),
+                "nombre_cliente": nombre,
+                "fecha": ev.get("fecha"),
+                "peso": ev.get("peso"),
+                "imc": ev.get("imc"),
+                "calorias_quemadas": ev.get("calorias_quemadas"),
+                "fuerza": ev.get("fuerza"),
+                "resistencia": ev.get("resistencia"),
+                "masa_muscular": ev.get("masa_muscular"),
+                "grasa_corporal": ev.get("grasa_corporal"),
+                "objetivo_personal": ev.get("objetivo_personal"),
+                "notas": ev.get("notas")
             })
-
-        except Exception as e:
-            print(f"Error al cargar estadísticas del dashboard: {e}")
-            return jsonify({"ok": False, "mensaje": f"Error interno al obtener estadísticas: {str(e)}"}), 500
-
-
-    @app.route("/api/entrenador/cargarMiembros", methods=["GET"])
-    def cargar_miembros():
-        """
-        Carga la lista de todos los usuarios con rol 'miembro'.
-        CORRECCIÓN: Asegura que la consulta principal solo filtre por id_rol.
-        """
-        try:
-            # Paso 1: Obtener el ID del rol 'miembro'
-            res_rol = supabase.from_('roles').select('id_rol').eq('nombre', 'miembro').limit(1).maybe_single().execute()
-            id_rol_miembro = res_rol.data.get('id_rol') if res_rol.data else None
-
-            if not id_rol_miembro:
-                # Si no se encuentra el rol, asumimos que no hay miembros (o la tabla roles está mal)
-                return jsonify({"ok": True, "miembros": [], "mensaje": "No se encontró el ID para el rol 'miembro'. Asegure que la tabla 'roles' contiene un rol con nombre 'miembro'."})
-
-            # Paso 2: Consulta principal de usuarios, filtrando solo por id_rol
-            # SIN intentar hacer joins implícitos en el SELECT para evitar el error de alias
-            res_members = supabase.from_('usuarios').select(
-                'id_usuario, nombre, disciplina, id_entrenador'
-            ).eq('id_rol', id_rol_miembro).execute()
-            
-            miembros_data = []
-            if res_members.data:
-                for member in res_members.data:
-                    member_id = member['id_usuario']
-                    trainer_id = member.get('id_entrenador')
-                    trainer_name = None
-                    
-                    # Paso 3: Consulta secundaria para el nombre del entrenador (si aplica)
-                    if trainer_id:
-                        # Asumo que los entrenadores también son usuarios
-                        res_trainer = supabase.from_('usuarios').select('nombre').eq('id_usuario', trainer_id).limit(1).maybe_single().execute()
-                        if res_trainer.data:
-                            trainer_name = res_trainer.data.get('nombre')
-                    
-                    # Paso 4: Fetch the latest membership status (m_membresias)
-                    res_membership = supabase.from_('m_membresias').select('estado, fecha_fin').eq('id_miembro', member_id).order('fecha_fin', desc=True).limit(1).execute()
-                    latest_membership = res_membership.data[0] if res_membership.data else {}
-                    
-                    # Paso 5: Fetch the latest progress data (m_progreso)
-                    res_progress = supabase.from_('m_progreso').select('*').eq('id_miembro', member_id).order('fecha', desc=True).limit(1).execute()
-                    latest_progress = res_progress.data[0] if res_progress.data else {}
-                    
-                    
-                    # Paso 6: Ensambla la estructura de datos
-                    miembro_info = {
-                        'id': member_id, 
-                        'nombre': member['nombre'],
-                        'disciplina': member.get('disciplina'),
-                        'entrenador': trainer_name,
-                        
-                        # Datos de la Membresía - Usar get() para valores por defecto seguros
-                        'estado_membresia': latest_membership.get('estado', 'Sin Registrar'),
-                        'fecha_fin': latest_membership.get('fecha_fin'), 
-                        
-                        # Métricas del último registro en m_progreso
-                        'peso': latest_progress.get('peso'),
-                        'imc': latest_progress.get('imc'),
-                        'calorias_quemadas': latest_progress.get('calorias_quemadas'),
-                        'objetivo_personal': latest_progress.get('objetivo_personal'),
-                        'ultima_sesion': latest_progress.get('fecha'),
-                    }
-                    miembros_data.append(miembro_info)
-
-            return jsonify({"ok": True, "miembros": miembros_data})
-
-        except Exception as e:
-            print(f"Error al cargar miembros: {e}")
-            # Retornamos el error completo para facilitar la depuración por parte del usuario
-            return jsonify({"ok": False, "mensaje": f"Error interno del servidor al obtener la lista de miembros: {str(e)}"}), 500
-
-    @app.route("/api/entrenador/registrarMetricas", methods=["POST"])
-    def registrar_metricas():
-        """
-        Registra nuevas métricas de progreso en la tabla m_progreso.
-        """
-        try:
-            data = request.json
-            
-            required_fields = ['id_miembro', 'peso', 'calorias_quemadas']
-            if not all(field in data for field in required_fields):
-                return jsonify({"ok": False, "mensaje": "Faltan campos obligatorios."}), 400
-
-            metricas = {
-                'id_miembro': data.get('id_miembro'), # id_miembro debe ser el id_usuario
-                'peso': float(data.get('peso')),
-                'imc': float(data.get('imc')) if data.get('imc') else None,
-                'calorias_quemadas': int(data.get('calorias_quemadas', 0)),
-                'fuerza': float(data.get('fuerza')) if data.get('fuerza') else None,
-                'resistencia': float(data.get('resistencia')) if data.get('resistencia') else None,
-                'masa_muscular': float(data.get('masa_muscular')) if data.get('masa_muscular') else None,
-                'grasa_corporal': float(data.get('grasa_corporal')) if data.get('grasa_corporal') else None,
-                'notas': data.get('notas'),
-                'objetivo_personal': data.get('objetivo_personal'),
-                'fecha': datetime.now(timezone.utc).isoformat()
-            }
-            
-            res = supabase.from_('m_progreso').insert([metricas]).execute()
-            
-            if res.data:
-                return jsonify({"ok": True, "mensaje": "Métricas registradas exitosamente."})
-            else:
-                error_message = res.error.get('message', 'Error desconocido al registrar métricas.') if res.error else 'No data returned on insertion.'
-                print(f"Supabase Error: {error_message}")
-                return jsonify({"ok": False, "mensaje": error_message}), 500
-            
-        except ValueError:
-            return jsonify({"ok": False, "mensaje": "Error de formato en los datos numéricos o nulos."}), 400
-        except Exception as e:
-            print(f"Error al registrar métricas: {e}")
-            return jsonify({"ok": False, "mensaje": "Error interno del servidor al registrar métricas."}), 500
-
-    @app.route("/api/entrenador/cargarDetalle/<id_miembro>", methods=["GET"])
-    def cargar_detalle(id_miembro):
-        """
-        Carga el historial completo de métricas de progreso para un miembro específico.
-        (id_miembro es el id_usuario en este contexto)
-        """
-        try:
-            res = supabase.from_('m_progreso').select('*').eq('id_miembro', id_miembro).order('fecha', desc=False).execute()
-            
-            if res.data:
-                historial = res.data
-                for entry in historial:
-                    # Formatea la fecha para mejor visualización en el frontend
-                    if entry.get('fecha'):
-                        # Asume que la fecha es ISO 8601 UTC y la formatea
-                        entry['fecha'] = datetime.fromisoformat(entry['fecha'].replace('Z', '+00:00')).strftime('%Y-%m-%d')
-
-                return jsonify({"ok": True, "historial": historial})
-            
-            return jsonify({"ok": False, "mensaje": "No se encontró historial para el miembro."}), 404
-
-        except Exception as e:
-            print(f"Error al cargar detalle: {e}")
-            return jsonify({"ok": False, "mensaje": "Error interno del servidor al obtener el historial."}), 500
-
-    @app.route("/api/entrenador/cargarEntrenadores", methods=["GET"])
-    def cargar_entrenadores():
-        """
-        Carga la lista de todos los entrenadores/staff.
-        Filtra por el rol 'entrenador'.
-        """
-        try:
-            # Paso 1: Obtener el ID del rol 'entrenador'
-            res_rol = supabase.from_('roles').select('id_rol').eq('nombre', 'entrenador').limit(1).maybe_single().execute()
-            id_rol_entrenador = res_rol.data.get('id_rol') if res_rol.data else None
-            
-            if not id_rol_entrenador:
-                return jsonify({"ok": True, "entrenadores": [], "mensaje": "Rol 'entrenador' no encontrado."})
-
-
-            # Paso 2: Consulta de usuarios con rol 'entrenador'
-            res = supabase.from_('usuarios').select('id_usuario, nombre').eq('id_rol', id_rol_entrenador).execute()
-            
-            # Mapea los resultados para que el frontend los reciba como {id: ..., nombre: ...}
-            entrenadores_list = [{"id": e['id_usuario'], "nombre": e['nombre']} for e in res.data]
-            
-            return jsonify({"ok": True, "entrenadores": entrenadores_list})
-
-        except Exception as e:
-            print(f"Error al cargar entrenadores: {e}")
-            return jsonify({"ok": False, "mensaje": "Error interno del servidor al obtener entrenadores."}), 500
-
+        
+        return jsonify({"ok": True, "evaluaciones": evaluaciones})
+    
+    except Exception as e:
+        return jsonify({"ok": False, "mensaje": str(e)}), 500
 
 # FIN MODULO - ENTRENADOR
 
@@ -1647,58 +1669,156 @@ def admin_gestion_clases_general_delete(id_clase):
 @app.route("/api/admin/reportes_data", methods=["GET"])
 def admin_reportes_data():
     tipo = request.args.get("tipo")
-    usuarios_ids = request.args.get("usuarios", "")
-    usuarios_ids = [u.strip() for u in usuarios_ids.split(",") if u.strip()]
+    inicio = request.args.get("inicio")
+    fin = request.args.get("fin")
+    cedula = request.args.get("cedula")
 
     labels = []
     valores = []
     detalles = []
 
+    id_usuario_filtrado = None
+    if cedula:
+        r = supabase.table("usuarios").select("id_usuario").eq("cedula", cedula).single().execute()
+        if r.data:
+            id_usuario_filtrado = r.data["id_usuario"]
+
     if tipo == "asistencia":
-        query = supabase.table("M_Reservas").select("*")
-        if usuarios_ids:
-            query = query.in_("id_miembro", usuarios_ids)
-        reservas = query.execute().data or []
-        resumen = {}
-        for r in reservas:
-            uid = r["id_miembro"]
-            resumen[uid] = resumen.get(uid, 0) + 1
-            detalles.append({
-                "nombre": uid,
-                "asistencia": 1,
-                "pagos_totales": 0,
-                "retencion": 0,
-                "satisfaccion": 0,
-                "progreso": 0,
-                "nutricion": ""
-            })
-        labels = list(resumen.keys())
-        valores = list(resumen.values())
+        q = supabase.table("m_clases_reservadas").select("*")
+        if id_usuario_filtrado:
+            q = q.eq("id_miembro", id_usuario_filtrado)
+        if inicio:
+            q = q.gte("fecha", inicio)
+        if fin:
+            q = q.lte("fecha", fin)
+        reservas = q.execute().data or []
+        total_confirmadas = sum(1 for r in reservas if r.get("asistencia_confirmada") is True)
+        total_no_confirmadas = sum(1 for r in reservas if r.get("asistencia_confirmada") is False)
+        total = total_confirmadas + total_no_confirmadas
+        porcentaje_confirmadas = round((total_confirmadas / total * 100), 2) if total > 0 else 0
+        labels = ["Confirmadas", "No confirmadas"]
+        valores = [total_confirmadas, total_no_confirmadas]
+        detalles.append({
+            "total_reservas": total,
+            "confirmadas": total_confirmadas,
+            "no_confirmadas": total_no_confirmadas,
+            "porcentaje_confirmadas": f"{porcentaje_confirmadas}%",
+            "promedio_simple": round(((total_confirmadas + total_no_confirmadas) / 2), 2) if total > 0 else 0
+        })
+        return jsonify({"labels": labels, "valores": valores, "detalles": detalles})
 
-    elif tipo == "progreso":
-        query = supabase.table("M_Progreso").select("*")
-        if usuarios_ids:
-            query = query.in_("id_miembro", usuarios_ids)
-        prog_data = query.execute().data or []
-        for p in prog_data:
-            labels.append(p["fecha"])
-            valores.append(p.get("peso", 0))
-            detalles.append({
-                "nombre": p["id_miembro"],
-                "asistencia": 0,
-                "pagos_totales": 0,
-                "retencion": 0,
-                "satisfaccion": 0,
-                "progreso": p.get("peso", 0),
-                "nutricion": ""
-            })
+    if tipo == "ingresos":
+        q = supabase.table("m_membresias").select("*")
+        if id_usuario_filtrado:
+            q = q.eq("id_miembro", id_usuario_filtrado)
+        else:
+            q = q.eq("estado", "activa")
+        if inicio:
+            q = q.gte("fecha_inicio", inicio)
+        if fin:
+            q = q.lte("fecha_fin", fin)
+        membresias = q.execute().data or []
+        total_activas = len([m for m in membresias if m.get("estado") == "activa" or id_usuario_filtrado])
+        total_ingresos = sum(float(m.get("precio", 0) or 0) for m in membresias)
+        promedio_por_membresia = round(total_ingresos / total_activas, 2) if total_activas > 0 else 0
+        labels = ["Total Membresías", "Monto Total"]
+        valores = [total_activas, total_ingresos]
+        detalles.append({
+            "total_membresias": total_activas,
+            "total_ingresos": round(total_ingresos, 2),
+            "promedio_por_membresia": promedio_por_membresia
+        })
+        return jsonify({"labels": labels, "valores": valores, "detalles": detalles})
 
-    return jsonify({"labels": labels, "valores": valores, "detalles": detalles})
+    if tipo == "nutricion":
+        q = supabase.table("n_planes_nutricion").select("*")
+        if id_usuario_filtrado:
+            q = q.eq("id_miembro", id_usuario_filtrado)
+        if inicio:
+            q = q.gte("fecha_inicio", inicio)
+        if fin:
+            q = q.lte("fecha_fin", fin)
+        planes = q.execute().data or []
+        counts = {}
+        for p in planes:
+            fecha = p.get("fecha_inicio") or p.get("fecha_creacion") or p.get("fecha_fin")
+            if not fecha:
+                continue
+            mes = str(fecha)[:7]
+            counts[mes] = counts.get(mes, 0) + 1
+        sorted_months = sorted(counts.keys())
+        labels = sorted_months
+        valores = [counts[m] for m in sorted_months]
+        total_planes = sum(valores)
+        promedio_mensual = round(total_planes / len(sorted_months), 2) if len(sorted_months) > 0 else total_planes
+        detalles.append({
+            "total_planes": total_planes,
+            "meses_incluidos": len(sorted_months),
+            "promedio_mensual": promedio_mensual
+        })
+        return jsonify({"labels": labels, "valores": valores, "detalles": detalles})
+
+    if tipo == "spa":
+        q = supabase.table("r_citas").select("*")
+        q = q.in_("tipo_servicio", ["Masaje", "Sauna"])
+        if id_usuario_filtrado:
+            q = q.eq("id_miembro", id_usuario_filtrado)
+        if inicio:
+            q = q.gte("fecha", inicio)
+        if fin:
+            q = q.lte("fecha", fin)
+        citas = q.execute().data or []
+        if id_usuario_filtrado:
+            total_usuario = len(citas)
+            q_all = supabase.table("r_citas").select("*").in_("tipo_servicio", ["Masaje", "Sauna"])
+            if inicio:
+                q_all = q_all.gte("fecha", inicio)
+            if fin:
+                q_all = q_all.lte("fecha", fin)
+            citas_all = q_all.execute().data or []
+            usuarios_counts = {}
+            for c in citas_all:
+                uid = c.get("id_miembro")
+                if not uid:
+                    continue
+                usuarios_counts[uid] = usuarios_counts.get(uid, 0) + 1
+            total_all = sum(usuarios_counts.values())
+            num_usuarios = len(usuarios_counts)
+            promedio_por_usuario = round(total_all / num_usuarios, 2) if num_usuarios > 0 else 0
+            labels = ["Usuario (seleccionado)", "Promedio Usuarios"]
+            valores = [total_usuario, promedio_por_usuario]
+            detalles.append({
+                "total_usuario": total_usuario,
+                "total_global": total_all,
+                "usuarios_con_uso": num_usuarios,
+                "promedio_por_usuario": promedio_por_usuario
+            })
+            return jsonify({"labels": labels, "valores": valores, "detalles": detalles})
+        else:
+            usuarios_counts = {}
+            for c in citas:
+                uid = c.get("id_miembro")
+                if not uid:
+                    continue
+                usuarios_counts[uid] = usuarios_counts.get(uid, 0) + 1
+            total_all = sum(usuarios_counts.values())
+            num_usuarios = len(usuarios_counts)
+            promedio_por_usuario = round(total_all / num_usuarios, 2) if num_usuarios > 0 else 0
+            labels = ["Promedio uso por usuario"]
+            valores = [promedio_por_usuario]
+            detalles.append({
+                "total_citas": total_all,
+                "usuarios_con_uso": num_usuarios,
+                "promedio_por_usuario": promedio_por_usuario
+            })
+            return jsonify({"labels": labels, "valores": valores, "detalles": detalles})
+
+    return jsonify({"labels": [], "valores": [], "detalles": []})
 
 @app.route("/api/admin/usuarios_buscar")
 def admin_usuarios_buscar():
     cedula = request.args.get("cedula")
-    resp = supabase.table("Usuarios").select("*").eq("cedula", cedula).execute()
+    resp = supabase.table("usuarios").select("*").eq("cedula", cedula).execute()
     if resp.data and len(resp.data) > 0:
         return jsonify(resp.data[0])
     return jsonify(None)
@@ -1711,7 +1831,7 @@ def admin_obtener_reportes():
     cedula = request.args.get("cedula")
     filtros_usuario = {}
     if cedula:
-        resp_user = supabase.table("Usuarios").select("id_usuario").eq("cedula", cedula).single().execute()
+        resp_user = supabase.table("usuarios").select("id_usuario").eq("cedula", cedula).single().execute()
         if resp_user.data:
             filtros_usuario["id_miembro"] = resp_user.data["id_usuario"]
 
@@ -1720,9 +1840,13 @@ def admin_obtener_reportes():
     detalles = []
 
     if tipo == "asistencia":
-        query = supabase.table("M_Reservas").select("*")
+        query = supabase.table("m_clases_reservadas").select("*")
         if filtros_usuario:
             query = query.eq("id_miembro", filtros_usuario["id_miembro"])
+        if inicio:
+            query = query.gte("fecha", inicio)
+        if fin:
+            query = query.lte("fecha", fin)
         reservas = query.execute().data or []
         reservas_por_clase = {}
         for r in reservas:
@@ -1731,7 +1855,7 @@ def admin_obtener_reportes():
         valores = list(reservas_por_clase.values())
         for r in reservas:
             detalles.append({
-                "nombre": r["id_miembro"],
+                "nombre": r.get("id_miembro"),
                 "asistencia": 1,
                 "pagos_totales": 0,
                 "retencion": 0,
@@ -1741,9 +1865,13 @@ def admin_obtener_reportes():
             })
 
     if tipo == "progreso":
-        query = supabase.table("M_Progreso").select("*")
+        query = supabase.table("m_progreso").select("*")
         if filtros_usuario:
             query = query.eq("id_miembro", filtros_usuario["id_miembro"])
+        if inicio:
+            query = query.gte("fecha", inicio)
+        if fin:
+            query = query.lte("fecha", fin)
         progreso_data = query.execute().data or []
         for p in progreso_data:
             labels.append(p["fecha"])
@@ -1769,7 +1897,7 @@ def admin_agregar_comentario():
     calificacion = data.get("calificacion")
     if not id_usuario or not mensaje:
         return jsonify({"ok": False, "msg": "Datos incompletos"}), 400
-    resp = supabase.table("M_Feedback_Clases").insert({
+    resp = supabase.table("m_feedback_clases").insert({
         "id_usuario": id_usuario,
         "mensaje": mensaje,
         "id_clase": id_clase,
@@ -1778,6 +1906,44 @@ def admin_agregar_comentario():
     if resp.data:
         return jsonify({"ok": True, "msg": "Comentario agregado correctamente"})
     return jsonify({"ok": False, "msg": "Error al agregar comentario"}), 500
+
+@app.route("/reportes/kpis")
+def reportes_kpis():
+
+    # MEMBRESÍAS ACTIVAS
+    membresias_resp = supabase.table("m_membresias") \
+        .select("precio") \
+        .eq("estado", "activa") \
+        .execute()
+
+    membresias_activas = membresias_resp.data or []
+
+    total_membresias_activas = len(membresias_activas)
+
+    total_ingresos = sum(float(m["precio"]) for m in membresias_activas)
+
+    # ASISTENCIA PROMEDIO
+    reservas_resp = supabase.table("m_clases_reservadas") \
+        .select("asistencia_confirmada") \
+        .execute()
+
+    reservas = reservas_resp.data or []
+
+    total_reservas = len(reservas)
+    asistencias_confirmadas = sum(
+        1 for r in reservas if r.get("asistencia_confirmada") is True
+    )
+
+    asistencia_prom = 0
+    if total_reservas > 0:
+        asistencia_prom = round((asistencias_confirmadas / total_reservas) * 100, 2)
+
+    return jsonify({
+        "membresias": total_membresias_activas,
+        "asistencia": asistencia_prom,
+        "ingresos": total_ingresos
+    })
+
 
 # SECCION SISTEMA PUBLICIDAD
 
@@ -1933,6 +2099,8 @@ def admin_marketing_get():
         "secciones": secciones
     })
 
+# FIN MODULO
+
 
 # MODULO NUTRICIONISTA
 
@@ -1951,8 +2119,24 @@ def nutricionista_modulos_render(modulo):
 @app.route("/api/nutricionista/perfil/buscar", methods=["GET"])
 def nutricionista_buscar_miembro():
     q = request.args.get("q", "")
-    res = supabase.table("usuarios").select("*").ilike("nombre", f"%{q}%").execute()
-    items = [{"id": u["id_usuario"], "name": u["nombre"], "email": u["correo"]} for u in res.data]
+    res = supabase.table("usuarios").select("*").execute()
+    
+    items = []
+    if res.data:
+        q_normalized = unidecode(q.lower().strip())
+        palabras_query = q_normalized.split()
+        
+        for u in res.data:
+            nombre_completo = f"{u.get('nombre', '')} {u.get('apellido', '')}".strip()
+            nombre_normalized = unidecode(nombre_completo.lower())
+            
+            if all(palabra in nombre_normalized for palabra in palabras_query):
+                items.append({
+                    "id": u["id_usuario"],
+                    "name": nombre_completo,
+                    "email": u["correo"]
+                })
+    
     return jsonify({"items": items})
 
 @app.route("/api/nutricionista/perfil/get/<member_id>", methods=["GET"])
@@ -2387,6 +2571,9 @@ def api_nutricionista_sesiones_actualizar_estado(id_sesion):
     except Exception as e:
         return jsonify({"error": f"Error al actualizar el estado de la sesión: {str(e)}"}), 500
 
+# FIN MODULO
+
+
 # MODULO RECEPCIONISTA
 
 @app.route("/index_recepcionista")
@@ -2716,40 +2903,46 @@ def consultar_citas_por_cedula():
         return jsonify({"mensaje": "La cédula es requerida para la consulta."}), 400
 
     try:
-        response_user = supabase.table('usuarios').select('id_usuario').eq('cedula', cedula).limit(1).maybe_single().execute()
+        response_user = supabase.table('usuarios').select('id_usuario') \
+            .eq('cedula', cedula).limit(1).maybe_single().execute()
 
-        if not response_user.data:
-            return jsonify({"mensaje": "Miembro no encontrado o cédula incorrecta.", "citas": {}, "total": 0, "paginas": 0}), 404
+        # 🛡️ Validación SEGURO contra None y datos vacíos
+        if not response_user or not getattr(response_user, "data", None):
+            return jsonify({
+                "mensaje": "Miembro no encontrado o cédula incorrecta.",
+                "citas": {},
+                "total": 0,
+                "total_paginas": 0
+            }), 404
 
         id_miembro = response_user.data.get('id_usuario')
-        
+
         offset = (page - 1) * limit
-        
-        response_count = supabase.table('r_citas').select('id_cita', count='exact')\
-            .eq('id_miembro', id_miembro)\
-            .eq('estado', 'Reservada')\
-            .execute()
-        
-        total_citas = response_count.count if response_count.count else 0
-        total_paginas = (total_citas + limit - 1) // limit if total_citas > 0 else 0
-        
-        response_citas = supabase.table('r_citas').select('*')\
-            .eq('id_miembro', id_miembro)\
-            .eq('estado', 'Reservada')\
-            .order('fecha', desc=False)\
-            .order('hora', desc=False)\
-            .range(offset, offset + limit - 1)\
+
+        response_count = supabase.table('r_citas') \
+            .select('id_cita', count='exact') \
+            .eq('id_miembro', id_miembro) \
+            .eq('estado', 'Reservada') \
             .execute()
 
-        citas_formateadas = []
-        for cita in response_citas.data:
-            citas_formateadas.append({
-                "id_cita": cita.get("id_cita"),
-                "tipo_servicio": cita.get("tipo_servicio"),
-                "fecha": cita.get("fecha"),
-                "hora": str(cita.get("hora")),
-                "estado": cita.get("estado")
-            })
+        total_citas = response_count.count or 0
+        total_paginas = (total_citas + limit - 1) // limit if total_citas > 0 else 0
+
+        response_citas = supabase.table('r_citas').select('*') \
+            .eq('id_miembro', id_miembro) \
+            .eq('estado', 'Reservada') \
+            .order('fecha', desc=False) \
+            .order('hora', desc=False) \
+            .range(offset, offset + limit - 1) \
+            .execute()
+
+        citas_formateadas = [{
+            "id_cita": cita.get("id_cita"),
+            "tipo_servicio": cita.get("tipo_servicio"),
+            "fecha": cita.get("fecha"),
+            "hora": str(cita.get("hora")),
+            "estado": cita.get("estado")
+        } for cita in response_citas.data]
 
         return jsonify({
             "mensaje": "Citas encontradas exitosamente.",
@@ -2760,10 +2953,16 @@ def consultar_citas_por_cedula():
         }), 200
 
     except Exception as e:
+        # 🛡️ Protección fija contra response_user = None
         error_details = str(e)
-        if 'response_user' in locals() and response_user.error:
-             error_details = response_user.error.get('message', str(e))
-        return jsonify({"mensaje": "Error interno del servidor al consultar las citas.", "detalles": error_details}), 500
+
+        if 'response_user' in locals() and response_user and getattr(response_user, "error", None):
+            error_details = response_user.error.get("message", error_details)
+
+        return jsonify({
+            "mensaje": "Error interno del servidor al consultar las citas.",
+            "detalles": error_details
+        }), 500
 
 @app.route('/api/cancelar_cita', methods=['DELETE'])
 def cancelar_cita():
@@ -2792,7 +2991,171 @@ def cancelar_cita():
             error_details = response.error.get('message', str(e))
         return jsonify({"mensaje": "Error interno del servidor al cancelar la cita.", "detalles": error_details}), 500
 
+# MODULO MI PERFIL
+
+@app.route("/index_mi_perfil")
+def index_mi_perfil():
+    return render_template("mi_perfil.html", user=session.get("user"))
+
+@app.route("/mi_perfil_modulos_render/<modulo>")
+def mi_perfil_modulos(modulo):
+    user_data = session.get("user")
+    if not user_data:
+        user_data = {"rol": "invitado"}
+    return render_template(f"{modulo}.html", user=user_data)
+
+@app.route("/api/usuario/perfil", methods=["GET"])
+def obtener_perfil():
+    user_id = obtener_id_usuario()
+    if not user_id:
+        return jsonify({"success": False, "message": "No autorizado"}), 401
+    
+    try:
+        res = supabase.table("usuarios").select(
+            "id_usuario, cedula, nombre, apellido, genero, telefono, correo, direccion, fecha_nacimiento, metodo_pago, imagen_url"
+        ).eq("id_usuario", user_id).maybe_single().execute()
+        
+        if not res.data:
+            return jsonify({"success": False, "message": "Usuario no encontrado"}), 404
+        
+        user = res.data
+        return jsonify({
+            "success": True,
+            "user": {
+                "id_usuario": user.get("id_usuario"),
+                "cedula": user.get("cedula"),
+                "nombre": user.get("nombre"),
+                "apellido": user.get("apellido"),
+                "genero": user.get("genero"),
+                "telefono": user.get("telefono"),
+                "correo": user.get("correo"),
+                "direccion": user.get("direccion"),
+                "fecha_nacimiento": user.get("fecha_nacimiento"),
+                "metodo_pago": user.get("metodo_pago", "Efectivo"),
+                "imagen_url": user.get("imagen_url") or "/static/uploads/default_icon_profile.png"
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error al obtener perfil: {e}")
+        return jsonify({"success": False, "message": "Error al obtener datos del usuario"}), 500
+
+@app.route("/api/usuario/actualizar", methods=["PUT"])
+def actualizar_perfil():
+    user_id = obtener_id_usuario()
+    if not user_id:
+        return jsonify({"success": False, "message": "No autorizado"}), 401
+    
+    try:
+        nombre = request.form.get("nombre", "").strip()
+        apellido = request.form.get("apellido", "").strip()
+        genero = request.form.get("genero", "").strip()
+        telefono = request.form.get("telefono", "").strip()
+        correo = request.form.get("correo", "").strip().lower()
+        direccion = request.form.get("direccion", "").strip()
+        fecha_nacimiento = request.form.get("fecha_nacimiento", "").strip()
+        metodo_pago = request.form.get("metodo_pago", "Efectivo").strip()
+        
+        if not all([nombre, apellido, correo, direccion, metodo_pago]):
+            return jsonify({"success": False, "message": "Faltan campos obligatorios"}), 400
+        
+        if metodo_pago not in ["Efectivo", "Transferencia", "Tarjeta"]:
+            return jsonify({"success": False, "message": "Método de pago inválido"}), 400
+        
+        datos_actualizar = {
+            "nombre": nombre,
+            "apellido": apellido,
+            "genero": genero if genero else None,
+            "telefono": telefono if telefono else None,
+            "correo": correo,
+            "direccion": direccion,
+            "fecha_nacimiento": fecha_nacimiento if fecha_nacimiento else None,
+            "metodo_pago": metodo_pago
+        }
+        
+        if "imagen_url" in request.files:
+            file = request.files["imagen_url"]
+            if file and file.filename and allowed_file(file.filename):
+                try:
+                    upload_result = cloudinary.uploader.upload(
+                        file,
+                        folder="usuarios_perfil",
+                        resource_type="image"
+                    )
+                    datos_actualizar["imagen_url"] = upload_result.get("secure_url")
+                except Exception as e:
+                    print(f"Error al subir imagen: {e}")
+                    return jsonify({"success": False, "message": "Error al subir la imagen"}), 500
+        
+        res = supabase.table("usuarios").update(datos_actualizar).eq("id_usuario", user_id).execute()
+        
+        if not res.data:
+            return jsonify({"success": False, "message": "Error al actualizar perfil"}), 400
+        
+        user_actualizado = res.data[0]
+        
+        session["user"]["nombre"] = user_actualizado.get("nombre")
+        session["user"]["apellido"] = user_actualizado.get("apellido")
+        session["user"]["correo"] = user_actualizado.get("correo")
+        session["user"]["imagen_url"] = user_actualizado.get("imagen_url") or "/static/uploads/default_icon_profile.png"
+        
+        return jsonify({
+            "success": True,
+            "message": "Perfil actualizado correctamente",
+            "user": {
+                "id_usuario": user_actualizado.get("id_usuario"),
+                "cedula": user_actualizado.get("cedula"),
+                "nombre": user_actualizado.get("nombre"),
+                "apellido": user_actualizado.get("apellido"),
+                "genero": user_actualizado.get("genero"),
+                "telefono": user_actualizado.get("telefono"),
+                "correo": user_actualizado.get("correo"),
+                "direccion": user_actualizado.get("direccion"),
+                "fecha_nacimiento": user_actualizado.get("fecha_nacimiento"),
+                "metodo_pago": user_actualizado.get("metodo_pago"),
+                "imagen_url": user_actualizado.get("imagen_url") or "/static/uploads/default_icon_profile.png"
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error al actualizar perfil: {e}")
+        return jsonify({"success": False, "message": "Error al actualizar el perfil"}), 500
+
+@app.route("/api/usuario/cambiar_contrasena", methods=["PUT"])
+def cambiar_contrasena():
+    user_id = obtener_id_usuario()
+    if not user_id:
+        return jsonify({"success": False, "message": "No autorizado"}), 401
+    
+    try:
+        if not request.is_json:
+            return jsonify({"success": False, "message": "Content-Type JSON requerido"}), 415
+        
+        data = request.get_json()
+        nueva_contrasena = data.get("contrasena", "").strip()
+        
+        if not nueva_contrasena:
+            return jsonify({"success": False, "message": "La contraseña es obligatoria"}), 400
+        
+        if len(nueva_contrasena) < 6:
+            return jsonify({"success": False, "message": "La contraseña debe tener al menos 6 caracteres"}), 400
+        
+        hashed_password = scrypt.hash(nueva_contrasena)
+        
+        res = supabase.table("usuarios").update({
+            "contrasena": hashed_password
+        }).eq("id_usuario", user_id).execute()
+        
+        if not res.data:
+            return jsonify({"success": False, "message": "Error al cambiar la contraseña"}), 400
+        
+        return jsonify({"success": True, "message": "Contraseña actualizada correctamente"}), 200
+        
+    except Exception as e:
+        print(f"Error al cambiar contraseña: {e}")
+        return jsonify({"success": False, "message": "Error al cambiar la contraseña"}), 500
+
 # APP RUN
 
 if __name__=="__main__":
-    app.run(debug=True, port=3000)
+    app.run(debug=False, port=3000)

@@ -3,12 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Evaluación de Progreso | GymApp</title>
+<title>Evaluación de Progreso | Entrenador</title>
 <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='uploads/icon.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style_evaluacion_progreso.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/styles_trainer/style_evaluacion_progreso.css') }}">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-<script>const ID_ENTRENADOR="{{ session['id_usuario'] if session.get('id_usuario') else '' }}";</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="d-flex flex-column min-vh-100 bg-dark-purple">
@@ -16,67 +15,143 @@
 {% include 'navbar.html' %}
 
 <main class="container mt-4 flex-grow-1">
-  <h2 class="mb-4 text-center blog-intro">Evaluación de Progreso de Clientes</h2>
-  <div class="card p-4 mb-4">
-    <h5 class="mb-3">Registrar Nueva Evaluación</h5>
-    <form id="formEvaluacion" class="row g-3">
-      <div class="col-md-4"><input type="text" id="nombreCliente" class="form-control" placeholder="Nombre del Cliente" required></div>
-      <div class="col-md-4"><input type="date" id="fechaEvaluacion" class="form-control" required></div>
-      <div class="col-md-4"><input type="text" id="pesoActual" class="form-control" placeholder="Peso (kg)" required></div>
-      <div class="col-md-4"><input type="text" id="grasaCorporal" class="form-control" placeholder="Grasa Corporal (%)" required></div>
-      <div class="col-md-4"><input type="text" id="masaMuscular" class="form-control" placeholder="Masa Muscular (%)" required></div>
-      <div class="col-md-4"><input type="text" id="imc" class="form-control" placeholder="IMC" required></div>
-      <div class="col-md-12"><textarea id="observaciones" class="form-control" rows="2" placeholder="Observaciones del progreso..." required></textarea></div>
-      <div class="col-12"><button type="submit" class="btn btn-primary w-100">Guardar Evaluación</button></div>
-    </form>
-  </div>
-
-  <div class="card p-4 mb-4">
-    <h5 class="mb-3">Historial de Evaluaciones</h5>
-    <div class="table-responsive">
-      <table class="table table-bordered text-center">
-        <thead><tr><th>Cliente</th><th>Fecha</th><th>Peso (kg)</th><th>Grasa (%)</th><th>Músculo (%)</th><th>IMC</th><th>Observaciones</th><th>Acciones</th></tr></thead>
-        <tbody id="tablaEvaluaciones"></tbody>
-      </table>
+    <div class="card-title-center mb-4"><div class="bi bi-bar-chart-line me-2"> Evaluación de Progreso de Clientes</div></div>
+    
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center p-3">
+                <i class="bi bi-people-fill fs-1 text-primary"></i>
+                <h3 id="totalMiembros" class="mt-2">0</h3>
+                <p class="text-muted mb-0">Total Miembros</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center p-3">
+                <i class="bi bi-trophy-fill fs-1 text-success"></i>
+                <h3 id="metasAlcanzadas" class="mt-2">0</h3>
+                <p class="text-muted mb-0">Objetivos Cumplidos</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center p-3">
+                <i class="bi bi-calendar-check-fill fs-1 text-info"></i>
+                <h3 id="evaluacionesDelMes" class="mt-2">0</h3>
+                <p class="text-muted mb-0">Evaluaciones del Mes</p>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <div class="card p-4 mb-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h5>Evolución de Métricas</h5>
-      <select id="filtroGrafico" class="form-select w-auto">
-        <option value="mensual">Mensual</option>
-        <option value="semanal">Semanal</option>
-      </select>
+    <div class="card p-4 mb-4">
+        <h5 style="color: black;" class="mb-3">Registrar Nueva Evaluación</h5>
+        <form id="formEvaluacion" class="row g-3">
+            <div class="col-md-4">
+                <label style="color: black;" class="form-label">Cliente</label>
+                <select id="nombreCliente" class="form-select" required>
+                    <option value="">Seleccionar Cliente</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label style="color: black;" class="form-label">Fecha</label>
+                <input type="date" id="fechaEvaluacion" class="form-control" required>
+            </div>
+            <div class="col-md-4">
+                <label style="color: black;" class="form-label">Peso (kg)</label>
+                <input type="number" step="0.1" id="pesoActual" class="form-control" placeholder="Peso (kg)" required>
+            </div>
+            <div class="col-md-3">
+                <label style="color: black;" class="form-label">Grasa Corporal (%)</label>
+                <input type="number" step="0.1" id="grasaCorporal" class="form-control" placeholder="Grasa Corporal (%)">
+            </div>
+            <div class="col-md-3">
+                <label style="color: black;" class="form-label">Masa Muscular (%)</label>
+                <input type="number" step="0.1" id="masaMuscular" class="form-control" placeholder="Masa Muscular (%)">
+            </div>
+            <div class="col-md-3">
+                <label style="color: black;" class="form-label">IMC (auto-calculado)</label>
+                <input type="text" id="imc" class="form-control" placeholder="IMC" readonly>
+            </div>
+            <div class="col-md-3">
+                <label style="color: black;" class="form-label">Calorías Quemadas</label>
+                <input type="number" id="caloriasQuemadas" class="form-control" placeholder="Calorías">
+            </div>
+            <div class="col-md-3">
+                <label style="color: black;" class="form-label">Fuerza (1-10)</label>
+                <input type="number" min="1" max="10" id="fuerza" class="form-control" placeholder="Fuerza (1-10)">
+            </div>
+            <div class="col-md-3">
+                <label style="color: black;" class="form-label">Resistencia (1-10)</label>
+                <input type="number" min="1" max="10" id="resistencia" class="form-control" placeholder="Resistencia (1-10)">
+            </div>
+            <div class="col-md-6">
+                <label style="color: black;" class="form-label">Objetivo Personal</label>
+                <input type="text" id="objetivoPersonal" class="form-control" placeholder="Objetivo Personal">
+            </div>
+            <div class="col-md-12">
+                <label style="color: black;" class="form-label">Observaciones</label>
+                <textarea id="observaciones" class="form-control" rows="2" placeholder="Observaciones del progreso..."></textarea>
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary w-100">Guardar Evaluación</button>
+            </div>
+        </form>
     </div>
-    <canvas id="graficoEvaluacion" height="100"></canvas>
-  </div>
 
-  <div class="card p-4 mb-4">
-    <h5 class="mb-3">Reporte de Progreso</h5>
-    <div class="d-flex justify-content-between align-items-center">
-      <div>
-        <input type="text" id="clienteReporte" class="form-control" placeholder="Nombre del Cliente">
-      </div>
-      <button id="btnGenerarReporte" class="btn btn-primary"><i class="bi bi-file-earmark-arrow-down"></i> Generar Reporte PDF</button>
+    <div class="card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 style="color: black;" class="mb-0">Historial de Evaluaciones</h5>
+            <div class="d-flex gap-2">
+                <input type="text" id="buscarCliente" class="form-control" placeholder="Buscar cliente..." style="width: 250px;">
+                <select id="filtroMes" class="form-select" style="width: 200px;">
+                    <option value="">Todos los meses</option>
+                </select>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover text-center">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Fecha</th>
+                        <th>Peso (kg)</th>
+                        <th>Grasa (%)</th>
+                        <th>Músculo (%)</th>
+                        <th>IMC</th>
+                        <th>Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaEvaluaciones"></tbody>
+            </table>
+        </div>
+        <nav>
+            <ul class="pagination justify-content-center" id="paginacionEvaluaciones"></ul>
+        </nav>
     </div>
-  </div>
 
-  <div class="card p-4 mb-4">
-    <h5 class="mb-3">Retroalimentación de Evaluaciones</h5>
-    <div id="feedbackBox" class="chat-box mb-3"></div>
-    <div class="input-group">
-      <textarea id="feedbackInput" class="form-control" placeholder="Escribe una retroalimentación..." rows="1"></textarea>
-      <button id="sendFeedback" class="btn btn-primary"><i class="bi bi-send-fill"></i></button>
+    <div class="card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 style="color: black;">Evolución de Métricas</h5>
+            <div class="d-flex gap-2">
+                <select id="clienteGrafico" class="form-select" style="width: 250px;">
+                    <option value="">Seleccionar cliente</option>
+                </select>
+                <select id="filtroGrafico" class="form-select" style="width: 150px;">
+                    <option value="todos">Todo el historial</option>
+                    <option value="6meses">Últimos 6 meses</option>
+                    <option value="12meses">Últimos 12 meses</option>
+                </select>
+            </div>
+        </div>
+        <canvas id="graficoEvaluacion" height="100"></canvas>
     </div>
-  </div>
-
+    
 </main>
 
 {% include 'footer.html' %}
 
 <div id="toastContainer" class="position-fixed p-3 top-0 end-0"></div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="{{ url_for('static', filename='js/evaluacion.js') }}"></script>
+<script src="{{ url_for('static', filename='js/funtions_trainer/progreso_miembros.js') }}"></script>
+
 </body>
 </html>
