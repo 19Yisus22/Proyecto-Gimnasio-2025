@@ -9,6 +9,7 @@
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='uploads/icon.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles_nutritionist/style_plan_nutricional.css') }}">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <script>const ID_USUARIO="{{ session['user']['id_usuario'] if session.get('user') else '' }}";</script>
 </head>
 
 <body data-user-id="{{ user.id_usuario if user else '' }}">

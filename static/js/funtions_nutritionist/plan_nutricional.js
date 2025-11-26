@@ -25,13 +25,24 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSearch.addEventListener('click', searchMembers);
   searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') searchMembers(); });
 
+  function normalizarTexto(texto) {
+    return texto
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .trim();
+  }
+
   async function searchMembers() {
     const query = searchInput.value.trim();
     if (!query) return;
+    
     try {
       const res = await fetch(`/api/nutricionista/perfil/buscar?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       searchResults.innerHTML = '';
+      
       if (data.items && data.items.length > 0) {
         data.items.forEach(item => {
           const div = document.createElement('div');

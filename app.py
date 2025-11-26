@@ -1910,19 +1910,14 @@ def admin_agregar_comentario():
 @app.route("/reportes/kpis")
 def reportes_kpis():
 
-    # MEMBRESÍAS ACTIVAS
     membresias_resp = supabase.table("m_membresias") \
         .select("precio") \
         .eq("estado", "activa") \
         .execute()
 
     membresias_activas = membresias_resp.data or []
-
     total_membresias_activas = len(membresias_activas)
-
     total_ingresos = sum(float(m["precio"]) for m in membresias_activas)
-
-    # ASISTENCIA PROMEDIO
     reservas_resp = supabase.table("m_clases_reservadas") \
         .select("asistencia_confirmada") \
         .execute()
@@ -1943,7 +1938,6 @@ def reportes_kpis():
         "asistencia": asistencia_prom,
         "ingresos": total_ingresos
     })
-
 
 # SECCION SISTEMA PUBLICIDAD
 

@@ -1,597 +1,466 @@
-// --- CONFIGURACIÓN Y ESTADO GLOBAL ---
-let miembros = [];
-let chartPesoInstance = null;
-let chartCaloriasInstance = null;
-let chartComposicionInstance = null;
-let chartRendimientoInstance = null;
-let miembroActualId = null;
-
-// Constante para la altura (nota: este valor está fijo; idealmente debería venir del perfil del miembro)
-const ALTURA_FIJA_METROS = 1.70; 
-
 document.addEventListener("DOMContentLoaded", function(){
-    // Carga inicial de datos
-    entrenador_cargarMiembros(); 
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById("fechaEvaluacion").value = hoy;
     
-    // Event listeners principales
-    document.getElementById("formMetricas").addEventListener("submit", entrenador_registrarMetricas);
-    document.getElementById("actualizarProgreso").addEventListener("click", entrenador_cargarMiembros);
+    const API_BASE = '/api/entrenador';
+    const itemsPerPage = 10;
     
-    // Event listeners para filtros de tabla
-    document.getElementById("buscarMiembro").addEventListener("input", entrenador_filtrarTabla);
-    document.getElementById("filtroDisciplina").addEventListener("change", entrenador_filtrarTabla);
-    document.getElementById("filtroEntrenador").addEventListener("change", entrenador_filtrarTabla);
+    let allClients = [];
+    let allEvaluaciones = [];
+    let currentPage = 1;
+    let progresoChart;
+    const ALTURA_FIJA_METROS = 1.70;
     
-    // Event listener para cálculo automático de IMC
-    document.getElementById("peso").addEventListener("input", entrenador_calcularIMC);
-    
-    // Event listener para exportar PDF
-    document.getElementById("btnExportarPDF").addEventListener("click", entrenador_exportarPDF);
-});
+    const nombreClienteSelect = document.getElementById('nombreCliente');
+    const clienteGraficoSelect = document.getElementById('clienteGrafico');
+    const tablaEvaluacionesBody = document.getElementById('tablaEvaluaciones');
+    const paginacionEvaluaciones = document.getElementById('paginacionEvaluaciones');
+    const formEvaluacion = document.getElementById('formEvaluacion');
+    const buscarClienteInput = document.getElementById('buscarCliente');
+    const filtroMesSelect = document.getElementById('filtroMes');
+    const pesoActualInput = document.getElementById('pesoActual');
+    const imcInput = document.getElementById('imc');
+    const grasaCorporalInput = document.getElementById('grasaCorporal');
+    const masaMuscularInput = document.getElementById('masaMuscular');
+    const caloriasQuemadasInput = document.getElementById('caloriasQuemadas');
+    const fuerzaInput = document.getElementById('fuerza');
+    const resistenciaInput = document.getElementById('resistencia');
+    const objetivoPersonalInput = document.getElementById('objetivoPersonal');
+    const observacionesInput = document.getElementById('observaciones');
 
-// --- UTILERÍAS ---
-
-/**
- * Muestra un mensaje temporal tipo Toast en la interfaz.
- * @param {string} mensaje - El texto a mostrar.
- * @param {('success'|'danger'|'info'|'warning')} [tipo='success'] - Tipo de alerta.
- */
-function mostrarToast(mensaje, tipo = 'success') {
-    const toastContainer = document.getElementById('toastContainer');
-    const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-white bg-${tipo} border-0 rounded-lg shadow-xl`;
-    toast.setAttribute('role', 'alert');
-    toast.setAttribute('aria-live', 'assertive');
-    toast.setAttribute('aria-atomic', 'true');
-    
-    const icon = tipo === 'success' ? 'check-circle' : (tipo === 'info' ? 'info-circle' : 'exclamation-triangle');
-    
-    toast.innerHTML = `
-        <div class="d-flex p-2">
-            <div class="toast-body d-flex align-items-center">
-                <i class="bi bi-${icon}-fill me-2 fs-5"></i>
-                ${mensaje}
+    function showToast(message, type = 'success') {
+        const toastContainer = document.getElementById('toastContainer');
+        const toastEl = document.createElement('div');
+        toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+        toastEl.setAttribute('role', 'alert');
+        toastEl.setAttribute('aria-live', 'assertive');
+        toastEl.setAttribute('aria-atomic', 'true');
+        
+        const icon = type === 'success' ? 'check-circle' : (type === 'info' ? 'info-circle' : 'exclamation-triangle');
+        
+        toastEl.innerHTML = `
+            <div class="d-flex p-2">
+                <div class="toast-body d-flex align-items-center">
+                    <i class="bi bi-${icon}-fill me-2 fs-5"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white ms-auto me-2" data-bs-dismiss="toast"></button>
             </div>
-            <button type="button" class="btn-close btn-close-white ms-auto me-2" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-    `;
-    
-    toastContainer.appendChild(toast);
-    const bsToast = new bootstrap.Toast(toast, { delay: 5000 });
-    bsToast.show();
-    
-    // Limpieza de toasts antiguos
-    toast.addEventListener('hidden.bs.toast', () => toast.remove());
-}
-
-/**
- * Calcula el Índice de Masa Corporal (IMC) basado en el peso ingresado.
- * Utiliza la ALTURA_FIJA_METROS.
- */
-function entrenador_calcularIMC() {
-    const peso = parseFloat(document.getElementById("peso").value);
-    const altura = ALTURA_FIJA_METROS; 
-    const imcInput = document.getElementById("imc");
-    
-    if (peso > 0 && altura > 0) {
-        const imc = (peso / (altura * altura)).toFixed(1);
-        imcInput.value = imc;
-    } else {
-        imcInput.value = '';
+        `;
+        
+        toastContainer.appendChild(toastEl);
+        const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+        toast.show();
+        toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
     }
-}
 
-// --- GESTIÓN DE MIEMBROS Y ESTADO GENERAL ---
+    function normalizeText(text) {
+        if (!text) return '';
+        return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    }
 
-/**
- * Carga la lista de miembros desde el API y actualiza la tabla y las estadísticas.
- */
-async function entrenador_cargarMiembros(){
-    try {
-        const res = await fetch("/api/entrenador/cargarMiembros");
+    function calcularIMC() {
+        const peso = parseFloat(pesoActualInput.value);
+        const altura = ALTURA_FIJA_METROS;
         
-        if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        
-        const data = await res.json();
-
-        if(data.ok){
-            miembros = data.miembros;
-            entrenador_renderTabla(miembros);
-            entrenador_cargarEntrenadores(); // Cargar opciones de filtro de entrenadores
-            entrenador_actualizarEstadisticas(); // Actualizar las tarjetas de resumen
+        if (peso > 0 && altura > 0) {
+            const imc = (peso / (altura * altura)).toFixed(2);
+            imcInput.value = imc;
         } else {
-            // Manejo de errores de negocio desde el API
-            mostrarToast("Error al cargar miembros: " + (data.mensaje || "Mensaje de error no disponible"), 'danger');
+            imcInput.value = '';
         }
-    } catch (error) {
-        console.error("Error al cargar miembros:", error);
-        mostrarToast("Error de conexión al cargar miembros. Consulte la consola.", 'danger');
     }
-}
 
-/**
- * Actualiza las tarjetas de estadísticas en la parte superior de la interfaz.
- */
-function entrenador_actualizarEstadisticas() {
-    document.getElementById("totalMiembros").textContent = miembros.length;
-    
-    const metasAlcanzadas = miembros.filter(m => m.objetivo_personal && m.objetivo_personal.toLowerCase() === 'cumplido').length;
-    document.getElementById("metasAlcanzadas").textContent = metasAlcanzadas;
-    
-    // Cálculos estimados
-    const sesionesEstimadas = miembros.length * 12; // Ejemplo de estimación
-    document.getElementById("sesionesDelMes").textContent = sesionesEstimadas.toLocaleString();
-    
-    // Suma de todas las calorías quemadas reportadas por todos los miembros
-    const caloriasTotales = miembros.reduce((sum, m) => sum + (parseInt(m.calorias_quemadas) || 0), 0);
-    document.getElementById("caloriasTotales").textContent = (caloriasTotales).toLocaleString();
-}
-
-/**
- * Filtra la lista global de miembros según los criterios de búsqueda y renderiza la tabla.
- */
-function entrenador_filtrarTabla(){
-    const filtroNombre = document.getElementById("buscarMiembro").value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-    const filtroDisc = document.getElementById("filtroDisciplina").value;
-    const filtroEntr = document.getElementById("filtroEntrenador").value;
-    
-    const filtrados = miembros.filter(m => {
-        const nombreCompleto = (m.nombre || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-        
-        // Verifica si el nombre incluye el filtro
-        const cumpleNombre = nombreCompleto.includes(filtroNombre);
-        
-        // Verifica si la disciplina coincide (asume que `m.disciplina` es una cadena o array de disciplinas)
-        const cumpleDisciplina = filtroDisc === "Todos" || (m.disciplina && m.disciplina.includes(filtroDisc));
-        
-        // Verifica si el entrenador coincide
-        const cumpleEntrenador = filtroEntr === "Todos" || m.entrenador === filtroEntr;
-        
-        return cumpleNombre && cumpleDisciplina && cumpleEntrenador;
-    });
-    entrenador_renderTabla(filtrados);
-}
-
-/**
- * Carga la lista de entrenadores/staff disponibles para el filtro.
- */
-async function entrenador_cargarEntrenadores(){
-    try {
-        const res = await fetch("/api/entrenador/cargarEntrenadores"); 
-        if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        const data = await res.json();
-        const select = document.getElementById("filtroEntrenador");
-        
-        // Mantener la opción predeterminada
-        select.innerHTML = '<option value="Todos">Todos los Entrenadores/Staff</option>';
-        
-        if(data.ok && Array.isArray(data.entrenadores)){
-            data.entrenadores.forEach(e=>{
-                // Asegurarse de que el nombre sea seguro para usar como valor
-                if (e.nombre) {
-                    select.innerHTML += `<option value="${e.nombre}">${e.nombre}</option>`;
-                }
+    async function loadClients() {
+        try {
+            const response = await fetch(`${API_BASE}/cargarMiembros`); 
+            const data = await response.json();
+            allClients = data.miembros || [];
+            
+            [nombreClienteSelect, clienteGraficoSelect].forEach(select => {
+                select.innerHTML = '<option value="">Seleccionar Cliente</option>';
+                allClients.forEach(client => {
+                    const option = document.createElement('option');
+                    option.value = client.id_miembro; 
+                    option.textContent = client.nombre;
+                    select.appendChild(option);
+                });
             });
+
+        } catch (error) {
+            showToast('No se pudieron cargar los clientes.', 'danger');
         }
-    } catch (error) {
-        console.error("Error al cargar entrenadores:", error);
-        mostrarToast("No se pudo cargar la lista de entrenadores.", 'warning');
-    }
-}
-
-// --- MANIPULACIÓN DE LA TABLA Y DETALLES ---
-
-/**
- * Renderiza la tabla de progreso con la lista de miembros proporcionada.
- * Asigna listeners a los botones de registrar y detalle.
- * @param {Array<Object>} lista - Lista de objetos de miembros.
- */
-function entrenador_renderTabla(lista){
-    const tabla = document.getElementById("tablaProgreso");
-    tabla.innerHTML = "";
-    
-    if (lista.length === 0) {
-        tabla.innerHTML = `
-            <tr>
-                <td colspan="10" class="text-center py-5">
-                    <i class="bi bi-inbox fs-1 text-muted"></i>
-                    <p class="mt-2 text-muted">No se encontraron miembros con los filtros seleccionados</p>
-                </td>
-            </tr>
-        `;
-        return;
     }
     
-    lista.forEach((m, index) => {
-        // Lógica para determinar el estado visual de la membresía
-        let badgeClass = 'bg-secondary border border-secondary';
-        let badgeText = m.estado_membresia || 'SIN REGISTRO';
-        let nextPaymentDate = m.fecha_fin ? new Date(m.fecha_fin).toLocaleDateString() : 'N/A';
+    async function loadAllEvaluaciones() {
+        try {
+            const response = await fetch(`${API_BASE}/cargarEvaluaciones`);
+            const data = await response.json();
+            allEvaluaciones = data.evaluaciones || [];
+            populateMonthFilter(allEvaluaciones);
+            renderTable(allEvaluaciones);
+        } catch (error) {
+            showToast('No se pudieron cargar las evaluaciones.', 'danger');
+            allEvaluaciones = [];
+            renderTable([]);
+        }
+    }
+    
+    formEvaluacion.addEventListener('submit', guardarEvaluacion);
+
+    async function guardarEvaluacion(e) {
+        e.preventDefault();
+
+        const id_miembro = nombreClienteSelect.value;
+        const peso = parseFloat(pesoActualInput.value);
+        const imcCalculado = parseFloat(imcInput.value);
+        const grasaCorporal = parseFloat(grasaCorporalInput.value);
+        const masaMuscular = parseFloat(masaMuscularInput.value);
         
-        switch(m.estado_membresia) {
-            case 'activa':
-                badgeClass = 'bg-success border border-success';
-                badgeText = 'ACTIVA';
-                break;
-            case 'vencida':
-                badgeClass = 'bg-danger border border-danger';
-                badgeText = 'VENCIDA';
-                break;
-            case 'cancelada':
-                badgeClass = 'bg-warning border border-warning';
-                badgeText = 'CANCELADA';
-                break;
+        if (!id_miembro || !document.getElementById('fechaEvaluacion').value) {
+            showToast('Debe seleccionar un cliente y una fecha válidas.', 'warning');
+            return;
         }
 
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-            <td class="text-center">${index + 1}</td>
-            <td>
-                <div class="d-flex align-items-center">
-                    <div class="avatar bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2" 
-                        style="width: 40px; height: 40px; font-weight: bold;">
-                        ${m.nombre ? m.nombre.charAt(0).toUpperCase() : '?'}
-                    </div>
-                    <strong>${m.nombre || 'Miembro Desconocido'}</strong>
-                </div>
-            </td>
-            <td>
-                <i class="bi bi-person-badge"></i> ${m.entrenador || '<span class="text-muted">Sin asignar</span>'}
-            </td>
-            <!-- ESTADO MEMBRESÍA -->
-            <td class="text-center">
-                <span class="badge ${badgeClass} text-white shadow-sm">${badgeText}</span>
-            </td>
-            <!-- PRÓXIMO PAGO -->
-            <td class="text-center">
-                <strong>${nextPaymentDate}</strong>
-            </td>
-            <td class="text-center">
-                <span class="badge bg-secondary">${m.ultima_sesion || 'Nunca'}</span>
-            </td>
-            <td class="text-center">
-                <strong class="text-primary">${m.peso || '--'}</strong> kg
-            </td>
-            <td class="text-center">
-                <span class="badge bg-danger">${m.calorias_quemadas || '--'}</span>
-            </td>
-            <td>
-                <small class="text-truncate d-block" style="max-width: 200px;" title="${m.objetivo_personal || 'Sin objetivo'}">
-                    ${m.objetivo_personal || '<em class="text-muted">Sin objetivo establecido</em>'}
-                </small>
-            </td>
-            <td class="text-center">
-                <div class="btn-group btn-group-sm" role="group">
-                    <button class="btn btn-success btn-registrar" data-id="${m.id}" title="Registrar métricas">
-                        <i class="bi bi-plus-circle"></i>
-                    </button>
-                    <button class="btn btn-primary btn-detalle" data-id="${m.id}" data-nombre="${m.nombre}" title="Ver detalle">
-                        <i class="bi bi-bar-chart-line"></i>
-                    </button>
-                </div>
-            </td>
-        `;
-        tabla.appendChild(tr);
-    });
-
-    // Asignar Event Listeners a los botones dinámicos
-    document.querySelectorAll(".btn-registrar").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-            miembroActualId = e.currentTarget.dataset.id;
-            document.getElementById("miembroId").value = miembroActualId;
-            document.getElementById("formMetricas").reset();
-            document.getElementById("imc").value = ''; // Limpiar el IMC calculado
-            new bootstrap.Modal(document.getElementById("modalMetricas")).show();
-        });
-    });
-
-    document.querySelectorAll(".btn-detalle").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-            const nombre = e.currentTarget.dataset.nombre;
-            miembroActualId = e.currentTarget.dataset.id;
-            document.getElementById("detalleMiembroNombre").textContent = `Historial de ${nombre}`;
-            entrenador_cargarDetalle(miembroActualId);
-        });
-    });
-}
-
-/**
- * Carga el historial de progreso de un miembro específico desde el API y renderiza los gráficos.
- * @param {string} id - ID del miembro.
- */
-async function entrenador_cargarDetalle(id){
-    try {
-        const res = await fetch(`/api/entrenador/cargarDetalle/${id}`);
-        if (!res.ok) {
-             throw new Error(`HTTP error! status: ${res.status}`);
+        if (isNaN(peso) || isNaN(imcCalculado) || peso <= 0 || imcCalculado <= 0) {
+            showToast('Debe ingresar un peso válido para calcular el IMC.', 'warning');
+            return;
         }
-        const data = await res.json();
 
-        if(data.ok){
-            // Ordenar historial por fecha ascendente para los gráficos
-            const historial = data.historial.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+        if (imcCalculado >= 100 || peso >= 1000) {
+             showToast('El peso o IMC es excesivamente alto. Revise los valores.', 'warning');
+             return;
+        }
 
-            // --- Actualizar tarjetas de resumen en el modal ---
-            if (historial.length > 0) {
-                const ultimo = historial[historial.length - 1];
-                const primero = historial[0];
-                
-                document.getElementById("pesoActual").textContent = `${ultimo.peso || '--'} kg`;
-                
-                // Cálculo de variación de peso
-                const variacion = (ultimo.peso && primero.peso) ? (ultimo.peso - primero.peso).toFixed(1) : '--';
-                const variacionTexto = (variacion !== '--') ? `${variacion > 0 ? '+' : ''}${variacion} kg` : '--';
-                document.getElementById("variacionPeso").innerHTML = `<span class="text-${variacion > 0 ? 'danger' : 'success'}">${variacionTexto}</span> desde inicio`;
-                
-                // Cálculo de calorías promedio
-                const caloriasValidas = historial.map(h => parseFloat(h.calorias_quemadas)).filter(c => !isNaN(c) && c > 0);
-                const calPromedio = caloriasValidas.length > 0 ? (caloriasValidas.reduce((sum, c) => sum + c, 0) / caloriasValidas.length).toFixed(0) : '--';
-                document.getElementById("caloriasPromedio").textContent = calPromedio;
-                
-                document.getElementById("totalSesiones").textContent = historial.length;
-                document.getElementById("rachaActual").textContent = Math.min(historial.length, 15); // La racha es solo un ejemplo
-            } else {
-                document.getElementById("pesoActual").textContent = '-- kg';
-                document.getElementById("variacionPeso").textContent = '--';
-                document.getElementById("caloriasPromedio").textContent = '--';
-                document.getElementById("totalSesiones").textContent = '0';
-                document.getElementById("rachaActual").textContent = '0';
+        const payload = {
+            id_miembro,
+            fecha: document.getElementById('fechaEvaluacion').value,
+            peso: peso.toFixed(2), 
+            imc: imcCalculado.toFixed(2),
+            grasa_corporal: grasaCorporalInput.value ? grasaCorporal.toFixed(2) : null,
+            masa_muscular: masaMuscularInput.value ? masaMuscular.toFixed(2) : null,
+            calorias_quemadas: caloriasQuemadasInput.value ? parseInt(caloriasQuemadasInput.value) : 0,
+            fuerza: fuerzaInput.value ? parseInt(fuerzaInput.value) : null,
+            resistencia: resistenciaInput.value ? parseInt(resistenciaInput.value) : null,
+            objetivo_personal: objetivoPersonalInput.value || null,
+            notas: observacionesInput.value || null
+        };
+
+        try {
+            const response = await fetch(`${API_BASE}/registrarMetricas`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                throw new Error(data.mensaje || 'Error al guardar la evaluación.');
             }
 
-            // --- Destruir instancias de gráficos anteriores ---
-            if (chartPesoInstance) chartPesoInstance.destroy();
-            if (chartCaloriasInstance) chartCaloriasInstance.destroy();
-            if (chartComposicionInstance) chartComposicionInstance.destroy();
-            if (chartRendimientoInstance) chartRendimientoInstance.destroy();
-
-            // --- Configuración y renderizado de gráficos (Chart.js) ---
+            formEvaluacion.reset();
+            imcInput.value = '';
+            document.getElementById("fechaEvaluacion").value = hoy;
+            showToast('Evaluación guardada exitosamente.', 'success');
             
-            // 1. Gráfico de Peso
-            const ctxPeso = document.getElementById("chartProgresoPeso").getContext("2d");
-            chartPesoInstance = new Chart(ctxPeso, {
-                type: 'line',
-                data: {
-                    labels: historial.map(h => h.fecha),
-                    datasets: [{
-                        label: 'Peso (kg)',
-                        data: historial.map(h => h.peso),
-                        borderColor: 'rgb(25, 135, 84)',
-                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: true, position: 'top' } },
-                    scales: { y: { beginAtZero: false, title: { display: true, text: 'Peso (kg)' } } }
-                }
-            });
+            await loadAllEvaluaciones();
+            await updateDashboardMetrics();
+            updateChart(id_miembro, document.getElementById('filtroGrafico').value);
 
-            // 2. Gráfico de Calorías
-            const ctxCal = document.getElementById("chartProgresoCalorias").getContext("2d");
-            chartCaloriasInstance = new Chart(ctxCal, {
-                type: 'bar',
-                data: {
-                    labels: historial.map(h => h.fecha),
-                    datasets: [{
-                        label: 'Calorías Quemadas',
-                        data: historial.map(h => h.calorias_quemadas),
-                        backgroundColor: 'rgba(13, 110, 253, 0.6)',
-                        borderColor: 'rgb(13, 110, 253)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: true, position: 'top' } },
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Calorías' } } }
-                }
-            });
-
-            // 3. Gráfico de Composición Corporal
-            const ctxComp = document.getElementById("chartComposicion").getContext("2d");
-            chartComposicionInstance = new Chart(ctxComp, {
-                type: 'line',
-                data: {
-                    labels: historial.map(h => h.fecha),
-                    datasets: [
-                        {
-                            label: 'Grasa Corporal (%)',
-                            data: historial.map(h => h.grasa_corporal),
-                            borderColor: 'rgb(255, 99, 132)',
-                            tension: 0.2,
-                            hidden: false 
-                        },
-                        {
-                            label: 'Masa Muscular (%)',
-                            data: historial.map(h => h.masa_muscular),
-                            borderColor: 'rgb(54, 162, 235)',
-                            tension: 0.2,
-                            hidden: false
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: true, position: 'top' } },
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Porcentaje (%)' } } }
-                }
-            });
-
-            // 4. Gráfico de Rendimiento
-            const ctxRend = document.getElementById("chartRendimiento").getContext("2d");
-            chartRendimientoInstance = new Chart(ctxRend, {
-                type: 'line',
-                data: {
-                    labels: historial.map(h => h.fecha),
-                    datasets: [
-                        {
-                            label: 'Fuerza (Índice)',
-                            data: historial.map(h => h.fuerza),
-                            borderColor: 'rgb(255, 159, 64)',
-                            tension: 0.2
-                        },
-                        {
-                            label: 'Resistencia (Índice)',
-                            data: historial.map(h => h.resistencia),
-                            borderColor: 'rgb(75, 192, 192)',
-                            tension: 0.2
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: true, position: 'top' } },
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Índice de Rendimiento' } } }
-                }
-            });
-
-            // --- Renderizar lista de metas y notas (últimos registros primero) ---
-            const listaMetas = document.getElementById("listaMetas");
-            listaMetas.innerHTML = historial.map(h => 
-                `<li class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-bold">${h.fecha}</span>
-                        <span class="badge bg-primary">${h.objetivo_personal || 'Sin objetivo'}</span>
-                    </div>
-                    <div>
-                        Peso: <span class="fw-bold text-primary">${h.peso || '--'}kg</span>, 
-                        Calorías: <span class="fw-bold text-danger">${h.calorias_quemadas || '--'}</span>.
-                    </div>
-                    <small class="text-muted d-block">
-                        Fuerza: ${h.fuerza || '--'}, Resistencia: ${h.resistencia || '--'}, M. Muscular: ${h.masa_muscular || '--'}%, G. Corporal: ${h.grasa_corporal || '--'}%
-                    </small>
-                    <p class="mt-1 mb-0 small fst-italic">
-                        Observaciones: ${h.notas || 'Sin notas del staff.'}
-                    </p>
-                </li>`
-            ).reverse().join(''); // Invertir para mostrar el más reciente primero
-
-            new bootstrap.Modal(document.getElementById("modalDetalle")).show();
-
-        } else {
-            mostrarToast("No se pudo cargar el historial de progreso: " + (data.mensaje || "Error desconocido"), 'warning');
+        } catch (error) {
+            showToast(error.message || 'Ocurrió un error al guardar la evaluación.', 'danger');
         }
-    } catch (error) {
-        console.error("Error al cargar detalle:", error);
-        mostrarToast("Error de conexión al cargar el historial del miembro.", 'danger');
     }
-}
-
-// --- REGISTRO DE MÉTRICAS ---
-
-/**
- * Registra nuevas métricas de un miembro a través de una llamada POST al API.
- * @param {Event} e - Evento de submit del formulario.
- */
-async function entrenador_registrarMetricas(e){
-    e.preventDefault();
     
-    // Obtener peso y calcular IMC usando la altura fija
-    const pesoValue = document.getElementById("peso").value;
-    const altura = ALTURA_FIJA_METROS; 
-    const imc = (pesoValue && altura > 0) ? (parseFloat(pesoValue) / (altura * altura)).toFixed(1) : null;
+    function renderTable(data) {
+        let filteredData = data;
+        const searchValue = normalizeText(buscarClienteInput.value);
+        const selectedMonth = filtroMesSelect.value;
+        
+        if (searchValue) {
+            filteredData = filteredData.filter(evaluacion => {
+                const nombreCompleto = normalizeText(evaluacion.nombre_cliente);
+                return nombreCompleto.includes(searchValue);
+            });
+        }
 
-    const payload = {
-        id_miembro: document.getElementById("miembroId").value,
-        peso: parseFloat(pesoValue), // Asegurar que es un número
-        imc: parseFloat(imc), 
-        calorias_quemadas: parseInt(document.getElementById("calorias_quemadas").value) || 0, // Asegurar que es un número entero
-        fuerza: document.getElementById("fuerza").value,
-        resistencia: document.getElementById("resistencia").value,
-        masa_muscular: document.getElementById("masa_muscular").value,
-        grasa_corporal: document.getElementById("grasa_corporal").value,
-        notas: document.getElementById("notas").value,
-        objetivo_personal: document.getElementById("objetivo_personal").value
-    };
-    
-    try {
-        const res = await fetch("/api/entrenador/registrarMetricas",{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify(payload)
+        if (selectedMonth) {
+            filteredData = filteredData.filter(evaluacion => evaluacion.fecha.startsWith(selectedMonth));
+        }
+        
+        filteredData.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+        const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+        currentPage = Math.min(currentPage, totalPages > 0 ? totalPages : 1);
+        
+        const start = (currentPage - 1) * itemsPerPage;
+        const pageData = filteredData.slice(start, start + itemsPerPage);
+
+        tablaEvaluacionesBody.innerHTML = '';
+        if (pageData.length === 0) {
+            tablaEvaluacionesBody.innerHTML = '<tr><td colspan="8" class="py-4 text-muted">No hay evaluaciones registradas.</td></tr>';
+        }
+
+        pageData.forEach(evaluacion => {
+            const row = `
+                <tr>
+                    <td><strong>${evaluacion.nombre_cliente}</strong></td>
+                    <td>${evaluacion.fecha}</td>
+                    <td>${evaluacion.peso ? parseFloat(evaluacion.peso).toFixed(2) : '--'}</td>
+                    <td>${evaluacion.grasa_corporal ? parseFloat(evaluacion.grasa_corporal).toFixed(2) : '--'}</td>
+                    <td>${evaluacion.masa_muscular ? parseFloat(evaluacion.masa_muscular).toFixed(2) : '--'}</td>
+                    <td>${evaluacion.imc ? parseFloat(evaluacion.imc).toFixed(2) : '--'}</td>
+                    <td class="text-start"><small>${evaluacion.notas || 'N/A'}</small></td>
+                </tr>
+            `;
+            tablaEvaluacionesBody.insertAdjacentHTML('beforeend', row);
         });
-        
-        if (!res.ok) {
-             throw new Error(`HTTP error! status: ${res.status}`);
-        }
 
-        const data = await res.json();
-        
-        if(data.ok){
-            mostrarToast("Métricas guardadas exitosamente."); 
-            document.getElementById("formMetricas").reset();
-            entrenador_cargarMiembros(); // Recargar la lista para reflejar el cambio
-            bootstrap.Modal.getInstance(document.getElementById("modalMetricas")).hide();
-        } else {
-            mostrarToast("Error al guardar métricas: " + (data.mensaje || "Error desconocido"), 'danger');
-        }
-    } catch (error) {
-        console.error("Error al registrar:", error);
-        mostrarToast("Error de conexión al registrar métricas. Revise el API.", 'danger');
+        renderPaginationControls(totalPages);
     }
-}
-
-// --- EXPORTACIÓN PDF ---
-
-/**
- * Exporta el historial de progreso visible en el modal de detalle a un archivo PDF.
- */
-function entrenador_exportarPDF() {
-    // Se asume que las librerías jspdf y html2canvas ya están cargadas en el entorno HTML.
-    const { jsPDF } = window.jspdf;
     
-    const btnExport = document.getElementById('btnExportarPDF');
-    const originalDisplay = btnExport.style.display;
-    btnExport.style.display = 'none'; // Ocultar el botón durante la captura
+    function renderPaginationControls(totalPages) {
+        paginacionEvaluaciones.innerHTML = '';
+        if (totalPages <= 1) return;
 
-    const detalleContainer = document.getElementById('detalle-container');
-    const miembroNombre = document.getElementById('detalleMiembroNombre').textContent.replace('Historial de ', '');
+        const createPaginationItem = (page, text, disabled = false, active = false) => {
+            const li = document.createElement('li');
+            li.classList.add('page-item');
+            if (disabled) li.classList.add('disabled');
+            if (active) li.classList.add('active');
+            
+            const a = document.createElement('a');
+            a.classList.add('page-link');
+            a.href = '#';
+            a.textContent = text;
+            a.dataset.page = page;
+            
+            li.appendChild(a);
+            paginacionEvaluaciones.appendChild(li);
+        };
 
-    // Convertir el contenido del contenedor a una imagen canvas
-    html2canvas(detalleContainer, { 
-        scale: 2, // Mayor escala para mejor calidad de imagen
-        useCORS: true,
-        // Ignorar el botón de exportación durante la captura
-        ignoreElements: (element) => element === btnExport 
-    }).then(canvas => {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const imgWidth = 210; // Ancho A4 en mm
-        const pageHeight = 297; // Alto A4 en mm
-        const imgHeight = canvas.height * imgWidth / canvas.width;
-        let heightLeft = imgHeight;
-        let position = 0;
+        createPaginationItem(currentPage - 1, 'Anterior', currentPage === 1);
 
-        // Agregar la primera página
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        const startPage = Math.max(1, currentPage - 2);
+        const endPage = Math.min(totalPages, currentPage + 2);
 
-        // Si el contenido es más largo que una página, añadir más páginas
-        while (heightLeft >= 0) {
-            position = heightLeft - imgHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
+        for (let i = startPage; i <= endPage; i++) {
+            createPaginationItem(i, i, false, i === currentPage);
         }
 
-        pdf.save(`Progreso_${miembroNombre.replace(/\s/g, '_')}_${new Date().toLocaleDateString('es-ES')}.pdf`);
+        createPaginationItem(currentPage + 1, 'Siguiente', currentPage === totalPages);
+
+        paginacionEvaluaciones.querySelectorAll('.page-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const newPage = parseInt(e.target.dataset.page);
+                if (newPage > 0 && newPage <= totalPages) {
+                    currentPage = newPage;
+                    renderTable(allEvaluaciones);
+                }
+            });
+        });
+    }
+
+    function populateMonthFilter(evaluaciones) {
+        const select = document.getElementById("filtroMes");
+        const uniqueMonths = new Set();
         
-        mostrarToast('Reporte PDF generado exitosamente', 'info');
-    }).catch(error => {
-        console.error("Error al generar PDF:", error);
-        mostrarToast('Error al generar el PDF. Intente de nuevo.', 'danger');
-    }).finally(() => {
-        // Asegurar que el botón se muestre de nuevo
-        btnExport.style.display = originalDisplay; 
+        evaluaciones.forEach(e => {
+            if (e.fecha) {
+                const monthYear = e.fecha.substring(0, 7);
+                uniqueMonths.add(monthYear);
+            }
+        });
+
+        select.innerHTML = '<option value="">Todos los meses</option>';
+        [...uniqueMonths].sort((a, b) => new Date(b + '-01') - new Date(a + '-01')).forEach(monthYear => {
+            const [year, month] = monthYear.split('-');
+            const date = new Date(year, month - 1);
+            const monthName = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+            const option = document.createElement('option');
+            option.value = monthYear;
+            option.textContent = monthName[0].toUpperCase() + monthName.slice(1);
+            select.appendChild(option);
+        });
+    }
+    
+    buscarClienteInput.addEventListener('input', () => {
+        currentPage = 1;
+        renderTable(allEvaluaciones);
     });
-}
+
+    filtroMesSelect.addEventListener('change', () => {
+        currentPage = 1;
+        renderTable(allEvaluaciones);
+    });
+    
+    window.eliminarEvaluacion = async function(id) {
+        if (!confirm('¿Estás seguro de eliminar esta evaluación?')) return;
+        try {
+            const res = await fetch(`${API_BASE}/eliminarEvaluacion/${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            
+            if(res.ok && data.ok){
+                showToast("Evaluación eliminada");
+                await loadAllEvaluaciones();
+                await updateDashboardMetrics();
+            } else {
+                throw new Error(data.mensaje || 'Error al eliminar la evaluación.');
+            }
+        } catch (error) {
+            showToast(error.message || "Error de conexión", 'danger');
+        }
+    }
+    
+    async function updateDashboardMetrics() {
+        try {
+            const response = await fetch(`${API_BASE}/cargarEstadisticas`);
+            const data = await response.json();
+
+            document.getElementById('totalMiembros').textContent = data.total_miembros || 0;
+            document.getElementById('evaluacionesDelMes').textContent = data.evaluaciones_mes || 0;
+            document.getElementById('metasAlcanzadas').textContent = data.objetivos_cumplidos || 0;
+        } catch (error) {
+            showToast('No se pudieron cargar las estadísticas del dashboard.', 'warning');
+        }
+    }
+    
+    function calculateAverage(dataArray) {
+        const validData = dataArray.filter(v => v !== null && v !== undefined && !isNaN(v));
+        if (validData.length === 0) return null;
+        const sum = validData.reduce((a, b) => a + b, 0);
+        return sum / validData.length;
+    }
+
+    async function updateChart(idMiembro, filtro = 'todos') {
+        if (!idMiembro) {
+            if (progresoChart) progresoChart.destroy();
+            return;
+        }
+
+        const evalCliente = allEvaluaciones
+            .filter(e => e.id_miembro === idMiembro)
+            .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+        let datos = evalCliente;
+        
+        if (filtro !== 'todos') {
+            const meses = parseInt(filtro.replace('meses', ''));
+            const fechaLimite = new Date();
+            fechaLimite.setMonth(fechaLimite.getMonth() - meses);
+            datos = evalCliente.filter(e => new Date(e.fecha) >= fechaLimite);
+        }
+
+        if (progresoChart) progresoChart.destroy();
+        
+        if (datos.length === 0) {
+            const ctx = document.getElementById('graficoEvaluacion').getContext('2d');
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); 
+            return;
+        }
+
+        const ctx = document.getElementById('graficoEvaluacion').getContext('2d');
+        const labels = datos.map(e => e.fecha);
+        
+        const pesos = datos.map(e => parseFloat(e.peso));
+        const imcs = datos.map(e => parseFloat(e.imc));
+        const grasas = datos.map(e => parseFloat(e.grasa_corporal));
+        const musculos = datos.map(e => parseFloat(e.masa_muscular));
+        const fuerzas = datos.map(e => parseInt(e.fuerza));
+        const resistencias = datos.map(e => parseInt(e.resistencia));
+
+        const avgPeso = calculateAverage(pesos);
+        const avgGrasa = calculateAverage(grasas);
+        const avgMusculo = calculateAverage(musculos);
+
+        const dataSets = [
+            { label: 'Peso (kg)', data: pesos, borderColor: 'rgba(75, 192, 192, 1)', tension: 0.1, yAxisID: 'y_kg' },
+            { label: 'IMC', data: imcs, borderColor: 'rgba(255, 159, 64, 1)', tension: 0.1, yAxisID: 'y_kg' },
+            { label: 'Grasa Corporal (%)', data: grasas, borderColor: 'rgba(255, 99, 132, 1)', tension: 0.1, hidden: true, yAxisID: 'y_pct' },
+            { label: 'Masa Muscular (%)', data: musculos, borderColor: 'rgba(54, 162, 235, 1)', tension: 0.1, hidden: true, yAxisID: 'y_pct' },
+            { label: 'Fuerza (1-10)', data: fuerzas, borderColor: 'rgba(153, 102, 255, 1)', tension: 0.1, hidden: true, yAxisID: 'y_score' },
+            { label: 'Resistencia (1-10)', data: resistencias, borderColor: 'rgba(201, 203, 207, 1)', tension: 0.1, hidden: true, yAxisID: 'y_score' }
+        ];
+
+        if (avgPeso !== null) {
+            dataSets.push({ 
+                label: `Promedio Peso (${avgPeso.toFixed(2)}kg)`, 
+                data: Array(labels.length).fill(avgPeso), 
+                borderColor: 'rgba(75, 192, 192, 0.5)', 
+                borderDash: [5, 5], 
+                pointRadius: 0, 
+                tension: 0, 
+                yAxisID: 'y_kg',
+                hidden: false
+            });
+        }
+        if (avgGrasa !== null) {
+            dataSets.push({ 
+                label: `Promedio Grasa (${avgGrasa.toFixed(2)}%)`, 
+                data: Array(labels.length).fill(avgGrasa), 
+                borderColor: 'rgba(255, 99, 132, 0.5)', 
+                borderDash: [5, 5], 
+                pointRadius: 0, 
+                tension: 0, 
+                yAxisID: 'y_pct',
+                hidden: true
+            });
+        }
+        if (avgMusculo !== null) {
+             dataSets.push({ 
+                label: `Promedio Músculo (${avgMusculo.toFixed(2)}%)`, 
+                data: Array(labels.length).fill(avgMusculo), 
+                borderColor: 'rgba(54, 162, 235, 0.5)', 
+                borderDash: [5, 5], 
+                pointRadius: 0, 
+                tension: 0, 
+                yAxisID: 'y_pct',
+                hidden: true
+            });
+        }
+
+        progresoChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets: dataSets },
+            options: {
+                responsive: true,
+                interaction: { mode: 'index', intersect: false },
+                stacked: false,
+                scales: {
+                    y_kg: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Peso/IMC' } },
+                    y_pct: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Composición (%)' } },
+                    y_score: { type: 'linear', display: false, position: 'right', min: 0, max: 10, grid: { drawOnChartArea: false }, title: { display: true, text: 'Rendimiento (1-10)' } }
+                }
+            }
+        });
+    }
+
+    clienteGraficoSelect.addEventListener('change', (e) => {
+        const id = e.target.value;
+        const filtro = document.getElementById('filtroGrafico').value;
+        updateChart(id, filtro);
+    });
+
+    document.getElementById('filtroGrafico').addEventListener('change', (e) => {
+        const id = clienteGraficoSelect.value;
+        updateChart(id, e.target.value);
+    });
+    
+    (async function init() {
+        await loadClients();
+        await updateDashboardMetrics();
+        await loadAllEvaluaciones();
+        
+        if (allClients.length > 0) {
+            const firstClientUUID = allClients[0].id_miembro;
+            if (firstClientUUID) {
+                clienteGraficoSelect.value = firstClientUUID;
+                updateChart(firstClientUUID, 'todos');
+            }
+        }
+    })();
+
+    pesoActualInput.addEventListener('input', calcularIMC);
+});
